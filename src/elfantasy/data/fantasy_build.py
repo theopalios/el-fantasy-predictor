@@ -169,6 +169,17 @@ def build_fantasy(with_profiles: bool = True) -> dict[str, pd.DataFrame]:
     team_map = map_teams(matches, el_games)
     clubs = sorted(team_map["el_code"].unique())
     el_people = pd.concat([parse_people(el.club_people(year, c), year, c) for c in clubs], ignore_index=True)
+    # Some players are missing from the roster endpoint but appear in box scores: add them.
+    pg_path = PROCESSED_DIR / "player_games.parquet"
+    if pg_path.exists():
+        pg = pd.read_parquet(pg_path, columns=["season", "team", "player_code", "player_name"])
+        extra = (
+            pg[pg["season"] == year].drop_duplicates(["team", "player_code"])
+            .rename(columns={"team": "club", "player_code": "person_code", "player_name": "name"})
+            .assign(type="J")
+        )
+        extra = extra[~extra["person_code"].isin(el_people["person_code"])]
+        el_people = pd.concat([el_people, extra[["club", "person_code", "name", "type"]]], ignore_index=True)
     player_map = map_players(players, el_people, team_map)
     log.info("team map: %d/%d teams; player map: %d/%d matched",
              len(team_map), matches["home_abbr"].nunique(),

@@ -502,7 +502,7 @@ data/                      # gitignored: raw API cache + processed parquet (rebu
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Fantasy snapshot collector** running every round | **Built**; first snapshot taken for R14. Still to do: run it automatically before every deadline. |
+| M0 | **Fantasy snapshot collector** running every round | **Done.** First snapshot taken for R14. Automated with GitHub Actions (`.github/workflows/snapshot.yml`), Tue–Fri 14:41 UTC; the earliest 2026-27 tip-off is 16:00 UTC. |
 | M1 | Data layer | **Built**: EuroLeague 2016-17 → now, current-season fantasy tables, team/player id maps, verified scoring |
 | M2 | Features + baselines + backtest harness | Walk-forward metrics for the 3 baselines |
 | M3 | Game model, player model, availability rules, ILP (both modes) | Model beats baselines in the walk-forward test and the season simulation |
@@ -521,11 +521,11 @@ Answered in v0.2:
 * Training seasons: from 2016-17.
 * Two of the three rule checks were resolved from data.
 
+* Automatic snapshots: run by GitHub Actions.
+
 Still open:
 
-1. **Automatic snapshots:** should the collector run on a schedule before each round
-   deadline, committing to the repo? Otherwise it must be run by hand each week.
-2. **Coach in the 6-per-club limit:** unresolved. We use the stricter rule, which is
+1. **Coach in the 6-per-club limit:** unresolved. We use the stricter rule, which is
    always safe.
 
 ---
