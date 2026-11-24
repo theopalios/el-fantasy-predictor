@@ -42,8 +42,8 @@ Delivery is a Jupyter notebook. The MVP goes live this season.
 | Topic | Decision |
 |---|---|
 | Output | **Generic recommendations, not for a specific team** (v0.2): best 11 + rankings; trades only for a pasted roster |
-| Fantasy prices, positions, injury flags | Pulled from the fantasy app's backend (fantaking/Dunkest). Most of it turned out to be **public** (§8). The login token (`ELF_FANTASY_TOKEN`) is optional and only adds in-app odds and the injury list. |
-| Betting odds | **No paid data** (v0.2). No free historical EuroLeague odds dataset exists (§8), so models train on our own team ratings. Free live odds are blended in at prediction time and stored from now on. |
+| Fantasy prices, positions, injury flags | Pulled from the fantasy app's backend (fantaking/Dunkest). Everything we use is **public** (§8). A login token was tested and adds nothing: there are no in-app odds for EuroLeague and the injury list is empty. |
+| Betting odds | **No paid data** (v0.2). No free historical EuroLeague odds dataset exists, and the app has no odds (§8). The MVP game model uses **our own team ratings only**. Free live odds (e.g. a free-tier odds API key) can be added later if the backtest shows the game model is the weak link. |
 | Training seasons | 2016-17 onward (confirmed) |
 | Objective | Overall season ranking → **risk-neutral**: maximize expected points |
 | Price changes / team value | **Ignored in the objective** (points only). Prices still set the budget constraint. |
@@ -405,9 +405,9 @@ H = 3 on simulated seasons.
 |---|---|---|
 | EuroLeague stats API: `v2/.../games` (schedule, results, OT), `v2/.../games/{code}/stats` (box score), `v2/.../clubs/{club}/people` (rosters with position, height, birth date, tenure dates; head coaches) | Every PIR component, minutes, starter flag, ±, coach of record | **Public.** 2016-17 → 2026-27 R13 downloaded (`python -m elfantasy.data.build`). The v2 stats endpoint is 4× faster than the legacy `Boxscore` and carries roster codes. |
 | Fantasy app, **public** endpoints (league 10): `config`, `schedules/{s}/matchdays/{md}`, `matches/{id}/lineups`, `basketball/leagues/10/players/{id}/match-log/rendered`, `players/{id}/trend`, `players/{id}/profile` | Fantasy position, price, projected starter/bench/out, **probability of playing**, per-round **price history** (price before the round + change), fantasy points, ownership, injured flag; coaches included | **Public, no login.** Current-season tables: `python -m elfantasy.data.fantasy_build`. Pre-deadline state: `python -m elfantasy.data.snapshot`. |
-| Fantasy app, login-only: `odds/matches/{id}`, `leagues/10/injuries` | In-app bookmaker odds, injury list | Optional `ELF_FANTASY_TOKEN` (environment variable). The snapshot collector saves them automatically when the token is set. |
+| Fantasy app, login-only: `odds/matches/{id}`, `leagues/10/injuries`, `players-lists/...` | In-app bookmaker odds, injury list, player list | **Tested with a token on 24 Nov 2026: nothing useful.** Odds are empty for every match (the league config has `odds_comparator: null`, so EuroLeague Fantasy has no odds feature). The injury list is empty. The player list is a 10-player subset of the public lineups. The token is not needed. |
 | Odds history | Closing spreads/totals | **No free dataset found.** The only EuroLeague odds set on Kaggle is a 50-row sample of a paid file, and odds APIs charge for history. We start our own history with the snapshots. |
-| Optional free live odds | Spread + total | A free-tier odds API key (no payment) could add live lines if the in-app odds are not enough. Not needed for the MVP. |
+| Optional free live odds | Spread + total | The only route left is a free-tier odds API key (no payment, but needs a sign-up). Not needed for the MVP; reconsider after the backtest. |
 | Manual overrides | Injury news not yet in the app, lock/exclude players | A cell in the weekly notebook |
 
 **Storage:** raw JSON cached on disk (so we never re-download history), normalized into

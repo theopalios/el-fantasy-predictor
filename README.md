@@ -44,9 +44,9 @@ The app's pre-deadline state (probability of playing, projected lineups, ownersh
 flags) can't be fetched after the round starts. Snapshots are the only way to keep it, so they
 are committed to the repo.
 
-Optional: set `ELF_FANTASY_TOKEN` (your fantasy app login token) to also save the in-app odds and
-the injury list. Put it in a local `.env` file (gitignored) or in the environment settings. Never
-commit it.
+No login token is needed. The collector can read `ELF_FANTASY_TOKEN` from a local `.env` file
+(gitignored; never commit it). But as of 24 Nov 2026 the login-only endpoints add nothing: the app
+has no odds for EuroLeague and its injury list is empty.
 
 Processed tables go to `data/processed/*.parquet` (gitignored and rebuildable). Run the tests
 with `pytest`.
