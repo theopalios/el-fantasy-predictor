@@ -304,6 +304,20 @@ Round 14 onward. The MVP therefore combines:
 After ~10 rounds of snapshots matched to who actually played, a learned calibration of
 the app's probabilities replaces the fixed mapping (v2).
 
+As implemented in `elfantasy.weekly` (live runs):
+
+| Situation | P(plays) |
+|---|---|
+| Your override | OUT 0 / DOUBTFUL 0.30 / PROBABLE 0.75 |
+| App says out, or P(plays) = 0 | 0 |
+| App P(plays) = 0.25 or 0.5 | as given |
+| Played his team's last game | availability model |
+| Missed the last game but app says he plays (injury return, new signing) | 0.85 |
+| No EuroLeague game at all this season (usually 12th–15th men) | 0.25 |
+
+Missed-game features count only games the team has already played. Otherwise, predicting
+two rounds ahead would treat the unplayed game in between as missed.
+
 ### 6.3 Player points model `E[PIR | plays]`
 
 * **Algorithm:** LightGBM regressor (L2 loss, or Huber if outliers dominate). We also
@@ -518,7 +532,7 @@ data/                      # gitignored: raw API cache + processed parquet (rebu
 | M1 | Data layer | **Built**: EuroLeague 2016-17 → now, current-season fantasy tables, team/player id maps, verified scoring |
 | M2 | Features + baselines + backtest harness | **Done** (see [backtest_baselines.md](backtest_baselines.md)). 118-column feature frame, leakage-tested. Bar to beat: MAE 5.95, within-round Spearman 0.46 (2023-26), and ~135 pts/round in the 2026-27 best-11 simulation (46% of hindsight). |
 | M3 | Game model, player model, availability rules, ILP (both modes) | **Done** (see [backtest_models.md](backtest_models.md)). On held-out seasons the player model beats every baseline: MAE 5.86 vs 5.99, ranking 0.50 vs 0.47. It does so in every season. Best-11 simulation over 4 seasons (realistic pool): **146 pts/round with model × availability vs 135 for the best baseline**, about +440 points over a 38-round season. The game model beats Elo for coach points in 3 of 4 seasons. Blending in the app's price did not help, so it is not used. |
-| M4 | Weekly notebook live | First real recommendation, ideally ready for the **unlimited window after R18 (19–22 Dec)**, when anyone can rebuild their whole squad into the recommended 11 |
+| M4 | Weekly notebook live | **Done.** `notebooks/weekly_picks.ipynb` and `python -m elfantasy.weekly`, ~1 min per run. Dry run for R15 saved in `recommendations/2026-27/`. The first real run is R15 (Thu 3 Dec, after the 14:41 UTC snapshot). The unlimited window after R18 (19–22 Dec) is the first chance to rebuild a whole squad into the recommended 11. |
 | v2 | Learned availability, minutes × rate split, lookahead H>1, market features, fatigue/travel, domestic leagues | Each addition kept only if it improves the season simulation |
 
 ---

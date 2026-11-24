@@ -101,8 +101,11 @@ ELO_PER_POINT = 28.0     # Elo points per point of expected margin
 
 
 def elo_table(games: pd.DataFrame) -> pd.DataFrame:
-    """Pre-game Elo for both teams of every played game (margin-aware updates, FiveThirtyEight-style)."""
-    g = games[games["played"] & games["home_score"].notna()].sort_values("date_utc")
+    """Pre-game Elo for both teams of every game (margin-aware updates, FiveThirtyEight-style).
+
+    Played games update the ratings; games not yet played get pre-game rows from the current
+    ratings without updating them, so upcoming rounds have Elo features too."""
+    g = games.dropna(subset=["date_utc"]).sort_values("date_utc")
     rating: dict[str, float] = {}
     last_season: dict[str, int] = {}
     rows = []
@@ -119,6 +122,8 @@ def elo_table(games: pd.DataFrame) -> pd.DataFrame:
         p_home = 1.0 / (1.0 + 10 ** (-diff / 400.0))
         rows.append((r.season, r.gamecode, r.home_team, h, a, diff, p_home))
         rows.append((r.season, r.gamecode, r.away_team, a, h, -diff, 1 - p_home))
+        if not (r.played and pd.notna(r.home_score) and pd.notna(r.away_score)):
+            continue
         margin = r.home_score - r.away_score
         winner_diff = diff if margin > 0 else -diff
         mult = np.log(abs(margin) + 1) * (2.2 / (winner_diff * 0.001 + 2.2))

@@ -129,7 +129,13 @@ def availability_features(queries: pd.DataFrame, pg: pd.DataFrame, tgi: pd.DataF
 
     qq = q.dropna(subset=["idx"]).copy()
     qq["idx"] = qq["idx"].astype(int)
-    qq = qq.sort_values("idx")
+    # Only count team games that have been played: when predicting two rounds ahead, the
+    # still-unplayed game in between must not count as "missed".
+    team_last = (pg[pg["played"]][key].drop_duplicates().merge(tgi[[*key, "idx"]], on=key)
+                 .groupby(["season", "team"])["idx"].max().rename("team_last_idx").reset_index())
+    qq = qq.merge(team_last, on=["season", "team"], how="left")
+    qq["idx"] = np.minimum(qq["idx"], qq["team_last_idx"].fillna(qq["idx"] - 1).astype(int) + 1)
+    qq = qq.drop(columns="team_last_idx").sort_values("idx")
     played_s = played[[*grp, "idx", "n_played"]].rename(columns={"idx": "last_idx"})
     played_s["idx"] = played_s["last_idx"]
     m = pd.merge_asof(qq, played_s.sort_values("idx"), on="idx", by=grp,

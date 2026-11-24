@@ -116,7 +116,9 @@ def map_players(app_players: pd.DataFrame, el_people: pd.DataFrame, team_map: pd
     return pd.DataFrame(out)
 
 
-def build_fantasy(with_profiles: bool = True) -> dict[str, pd.DataFrame]:
+def build_fantasy(with_profiles: bool = True, with_match_logs: bool = True) -> dict[str, pd.DataFrame]:
+    """with_match_logs=False skips the per-player price/points history (only the backtest needs
+    it), which makes a weekly refresh of the player list and id maps take ~30 s."""
     year = current_season_year()
     app = FantasyAppAPI(HttpClient(min_interval=0.3))
     el = EuroLeagueAPI(HttpClient(cache_dir=RAW_CACHE_DIR))
@@ -152,13 +154,15 @@ def build_fantasy(with_profiles: bool = True) -> dict[str, pd.DataFrame]:
 
     logs, profiles = [], []
     for i, pid in enumerate(players["player_id"], 1):
-        logs.append(parse_match_log(app.player_match_log(int(pid)), int(pid)))
+        if with_match_logs:
+            logs.append(parse_match_log(app.player_match_log(int(pid)), int(pid)))
         if with_profiles:
             profiles.append(parse_profile(app.player_profile(int(pid))))
-        if i % 100 == 0:
+        if i % 100 == 0 and (with_match_logs or with_profiles):
             log.info("  players: %d/%d", i, len(players))
-    match_log = pd.concat(logs, ignore_index=True)
-    match_log["is_future"] = match_log["matchday"] >= current_md
+    match_log = pd.concat(logs, ignore_index=True) if logs else None
+    if match_log is not None:
+        match_log["is_future"] = match_log["matchday"] >= current_md
     if profiles:
         prof = pd.DataFrame(profiles)[
             ["player_id", "avg_fantasy_pts", "total_price_change", "popularity", "is_on_fire", "is_injured", "started_from_bench"]
@@ -195,6 +199,8 @@ def build_fantasy(with_profiles: bool = True) -> dict[str, pd.DataFrame]:
     }
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     for name, df in tables.items():
+        if df is None:
+            continue
         df.to_parquet(PROCESSED_DIR / f"{name}.parquet", index=False)
         log.info("wrote %s (%d rows)", name, len(df))
     return tables
@@ -203,9 +209,10 @@ def build_fantasy(with_profiles: bool = True) -> dict[str, pd.DataFrame]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--no-profiles", action="store_true", help="skip per-player profile calls")
+    ap.add_argument("--no-match-logs", action="store_true", help="skip per-player price/points history")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    build_fantasy(with_profiles=not args.no_profiles)
+    build_fantasy(with_profiles=not args.no_profiles, with_match_logs=not args.no_match_logs)
 
 
 if __name__ == "__main__":

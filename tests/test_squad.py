@@ -59,6 +59,19 @@ def test_budget_binds():
     assert loose.objective >= tight.objective
 
 
+def test_trade_limit_from_roster():
+    players, coaches = _pool(seed=7)
+    start = best_squad(players.assign(exp=-players["exp"]), coaches)   # deliberately bad roster
+    roster = set(start.players.index) | {start.coach.name}
+    budget = start.cost + 5
+    free = best_squad(players, coaches, budget=budget)
+    limited = best_squad(players, coaches, budget=budget, current=roster, max_new=2)
+    assert limited.status == "Optimal"
+    new = (set(limited.players.index) | {limited.coach.name}) - roster
+    assert len(new) <= 2
+    assert limited.objective <= free.objective + 1e-6
+
+
 def test_infeasible_budget_is_reported():
     players, coaches = _pool(seed=5)
     res = best_squad(players, coaches, budget=10)

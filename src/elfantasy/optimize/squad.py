@@ -33,7 +33,11 @@ def best_squad(
     budget: float | None = None,
     locked: set | None = None,
     excluded: set | None = None,
+    current: set | None = None,
+    max_new: int | None = None,
 ) -> SquadResult:
+    """`current` + `max_new`: start from an existing roster (player and coach indices) and
+    allow at most `max_new` incoming players/coach (the trade limit; coach counts)."""
     rules = rules or default_rules()
     budget = rules.initial_budget if budget is None else budget
     mult = rules.multipliers
@@ -86,6 +90,11 @@ def best_squad(
 
     for i in locked & set(P.index):
         prob += x[i] == 1
+
+    if current is not None and max_new is not None:
+        incoming = pulp.lpSum(x[i] for i in P.index if i not in current) + \
+            pulp.lpSum(h[k] for k in C.index if k not in current)
+        prob += incoming <= max_new
 
     available = pulp.listSolvers(onlyAvailable=True)
     solver = pulp.HiGHS(msg=False) if "HiGHS" in available else pulp.PULP_CBC_CMD(msg=False)

@@ -14,14 +14,37 @@ How it works:
 2. An **integer-programming optimizer** picks the squad under the game's rules: budget,
    positions, formations, the 6-per-team limit, trade limits and the captain.
 
-Status: **data layer built, models next.** See [`docs/design.md`](docs/design.md) for the variables,
-models, rules and weekly flow. The game rules are encoded in
-[`config/game_rules.yaml`](config/game_rules.yaml) and were verified against the app's own scores.
+Status: **MVP live.** Data, features, models and the weekly notebook are built. See
+[`docs/design.md`](docs/design.md) for the variables, models, rules and weekly flow, and
+[`docs/backtest_models.md`](docs/backtest_models.md) for how the models perform. The game rules are
+encoded in [`config/game_rules.yaml`](config/game_rules.yaml) and were verified against the app's own
+scores.
+
+## Weekly picks
+
+Before each round's deadline, open `notebooks/weekly_picks.ipynb`, adjust the settings cell and
+**Run all**. You can set your budget, players you know are out, and optionally your roster to get
+trades. It refreshes the data, trains the models on all history (~1 min) and shows:
+
+- the best 11 with captain and coach
+- rankings by position and value picks
+- a coach ranking
+- why each player was picked
+
+The result is saved to `recommendations/`. The same from the command line:
+
+```bash
+python -m elfantasy.weekly --refresh --save
+```
+
+```bash
+python -m elfantasy.weekly --matchday 15 --budget 101.5 --out "Mike James" --save
+```
 
 ## Setup
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[model,notebook,dev]"
 ```
 
 ## Data commands

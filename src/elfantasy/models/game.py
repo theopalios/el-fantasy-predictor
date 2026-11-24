@@ -21,10 +21,18 @@ GAME_FEATURES = ["elo_diff", "net_diff", "rest_diff", "vac_diff", "is_home"]
 
 
 def game_frame(ctx: FeatureContext) -> pd.DataFrame:
-    """One row per team per game with pre-game features and outcomes."""
+    """One row per team per played game with pre-game features and outcomes."""
     tg = ctx.store.team_games
-    g = tg[["season", "gamecode", "team", "opponent", "date_utc", "is_home", "margin", "n_ot",
-            "coach_pts", "phase", "round"]].copy()
+    base = tg[["season", "gamecode", "team", "opponent", "date_utc", "is_home", "margin", "n_ot",
+               "coach_pts", "phase", "round"]].copy()
+    return game_features(ctx, base, ctx.vacated)
+
+
+def game_features(ctx: FeatureContext, base: pd.DataFrame, vacated: pd.DataFrame) -> pd.DataFrame:
+    """Pre-game features for team-perspective rows (season, gamecode, team, opponent,
+    date_utc, is_home). `vacated` has season, gamecode, team, vacated_min (actual absences
+    for past games; the app's injury list for upcoming ones)."""
+    g = base.copy()
     tf = team_features(g, ctx.tstate, "team")
     of = team_features(g, ctx.tstate, "opponent")
     g["net_diff"] = (tf["team_net"] - of["opp_net"]).fillna(0.0).to_numpy()
@@ -34,7 +42,7 @@ def game_frame(ctx: FeatureContext) -> pd.DataFrame:
     opp_rest = ctx.rest.rename(columns={"team": "opponent", "rest_days": "opp_rest_days"})
     g = g.merge(opp_rest[["season", "gamecode", "opponent", "opp_rest_days"]], on=["season", "gamecode", "opponent"], how="left")
     g["rest_diff"] = (g["rest_days"].clip(upper=7) - g["opp_rest_days"].clip(upper=7)).fillna(0.0)
-    vac = ctx.vacated[key + ["vacated_min"]]
+    vac = vacated[key + ["vacated_min"]]
     g = g.merge(vac, on=key, how="left")
     g = g.merge(vac.rename(columns={"team": "opponent", "vacated_min": "opp_vacated_min"}),
                 on=["season", "gamecode", "opponent"], how="left")
