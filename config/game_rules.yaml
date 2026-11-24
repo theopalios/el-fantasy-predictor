@@ -1,0 +1,103 @@
+# EuroLeague Fantasy Challenge: classic mode, season 2026-27
+#
+# Single source of truth for the scorer, the backtester and the optimizer.
+# Source: official rules at https://fantaking.gitbook.io/euroleague-fantasy-challenge-rules/
+# (fetched 2026-11-24). Items marked TODO(confirm) are not stated explicitly in
+# the rules and must be checked in the app before we rely on them.
+
+season: "2026-27"
+competition_code: E            # EuroLeague code in the public stats API
+fantasy_league_id: 10          # Dunkest/fantaking league id for EuroLeague Fantasy Challenge
+
+budget:
+  initial_credits: 100.0
+  late_entry_bonus_per_round: 0.3   # teams created after R1 get +0.3 cr per round already played
+
+squad:
+  players_per_position:
+    G: 4
+    F: 4
+    C: 2
+  head_coaches: 1
+  max_players_per_real_team: 6      # same in playoffs
+  coach_counts_toward_team_limit: false   # TODO(confirm)
+
+lineup:
+  starters: 5
+  sixth_man: 1
+  bench: 4
+  # Allowed starting-five formations as [guards, forwards, centers].
+  # Equivalent to: 1<=G<=3, 1<=F<=3, 1<=C<=2, G+F+C=5.
+  formations:
+    - [2, 2, 1]
+    - [1, 2, 2]
+    - [2, 1, 2]
+    - [1, 3, 1]
+    - [3, 1, 1]
+  score_multipliers:
+    starter: 1.0
+    sixth_man: 1.0
+    bench: 0.5
+    head_coach: 1.0
+  captain:
+    must_be_starter: true
+    multiplier: 2.0                 # applied to the captain's full score
+    doubled_on_average_score_award: false   # postponed game -> average score, captain NOT doubled
+
+scoring:
+  player:
+    # Identical to the official PIR ("Valuation" in EuroLeague box scores):
+    #   (PTS + REB + AST + STL + BLK + FD) - (missed FG + missed FT + TOV + BLK against + PF)
+    # Regular time plus overtime.
+    points: 1
+    rebounds: 1
+    assists: 1
+    steals: 1
+    turnovers: -1
+    blocks_made: 1
+    blocks_received: -1
+    fouls_drawn: 1
+    fouls_committed: -1
+    missed_field_goals: -1
+    missed_free_throws: -1
+    team_win_bonus_pct: 10          # +10% of the player's fantasy score in a team win
+    win_bonus_on_negative_score: unknown   # TODO(confirm): is a negative score multiplied by 1.1 too?
+    did_not_play: 0
+  head_coach:
+    # Margin is the final score difference from the coach's team's perspective.
+    # Any overtime game falls into the closest bucket (win +10 / loss -5).
+    # The official table lists 11-20 -> 20 and "20+" -> 25; we treat a margin of
+    # exactly 20 as the 11-20 bucket. TODO(confirm)
+    buckets:
+      - {result: win,  margin_min: 1,  margin_max: 10,   points: 10}
+      - {result: win,  margin_min: 11, margin_max: 20,   points: 20}
+      - {result: win,  margin_min: 21, margin_max: null, points: 25}
+      - {result: loss, margin_min: 1,  margin_max: 10,   points: -5}
+      - {result: loss, margin_min: 11, margin_max: 20,   points: -10}
+      - {result: loss, margin_min: 21, margin_max: null, points: -20}
+    overtime_points: {win: 10, loss: -5}
+    scores_even_if_absent: true     # dismissed, absent or disqualified coaches still score
+
+rounds:
+  # One fantasy round = one EuroLeague round = one game per team.
+  # Double-round weeks are two separate fantasy rounds with a short trade window between them.
+  regular_season_rounds: 38
+  turns_used: false                 # in-round swaps between game days are out of scope (pre-round only)
+
+trades:
+  per_round: 4
+  coach_trade_counts: true          # e.g. 3 players + coach, or 4 players
+  unlimited_windows_after_rounds: [6, 13, 18, 23, 28, 34]
+  unlimited_in_phases: [play_in, playoffs, final_four]
+  selling_price: current_price      # selling refunds the current price (credit budget moves with prices)
+
+prices:
+  updated_after_each_round: true
+  # Published drivers only; the exact formula is not public. With the same score, a
+  # cheaper player gains more. A player who misses games loses value.
+  drivers: [round_score, starting_price]
+  objective_weight: 0.0             # the user chose "points only": price changes are ignored
+
+special_cases:
+  postponed_game_outside_round: average_score   # players and coach get their season average
+  postseason_team_not_playing_in_round: 0       # players of teams with no game that round score 0

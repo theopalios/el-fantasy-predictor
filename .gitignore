@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.env
+config/settings.yaml
+
+# Data (raw API cache, DuckDB, parquet)
+data/
+*.duckdb
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
