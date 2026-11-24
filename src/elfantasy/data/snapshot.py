@@ -76,7 +76,9 @@ def take_snapshot(with_profiles: bool = True, matchday: int | None = None) -> Pa
         for pid in sorted(player_ids):
             out["profiles"][str(pid)] = app.player_profile(pid)
 
-    if app.has_token:
+    if not app.has_token:
+        log.info("no %s set: skipping in-app odds and injuries", "ELF_FANTASY_TOKEN")
+    else:
         out["odds"] = {}
         for mid in matches["match_id"]:
             try:

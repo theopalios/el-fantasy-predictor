@@ -128,6 +128,7 @@ def build_euroleague(
 
     player_games, team_games = add_game_context(player_games, team_games, games)
     add_fantasy_scores(player_games, team_games)
+    fill_positions(player_games, people)
 
     tables = {
         "games": games,
@@ -156,14 +157,40 @@ def add_fantasy_scores(player_games: pd.DataFrame, team_games: pd.DataFrame) -> 
     team_games["coach_pts"] = coach_points_series(team_games["margin"], team_games["n_ot"] > 0, rules)
 
 
+def fill_positions(player_games: pd.DataFrame, people: pd.DataFrame) -> None:
+    """Fill missing position_name (legacy box scores lack it) from that season's rosters,
+    falling back to the player's most common position in other seasons."""
+    if "position_name" not in player_games:
+        player_games["position_name"] = None
+    if people.empty:
+        return
+    roster = (
+        people[(people["type"] == "J") & people["position_name"].notna()]
+        .drop_duplicates(["season", "person_code"])
+        .set_index(["season", "person_code"])["position_name"]
+    )
+    key = pd.MultiIndex.from_arrays([player_games["season"], player_games["player_code"]])
+    missing = player_games["position_name"].isna()
+    player_games.loc[missing, "position_name"] = roster.reindex(key[missing.to_numpy()]).to_numpy()
+    usual = (
+        player_games.dropna(subset=["position_name"]).groupby("player_code")["position_name"]
+        .agg(lambda s: s.mode().iloc[0])
+    )
+    still = player_games["position_name"].isna()
+    player_games.loc[still, "position_name"] = player_games.loc[still, "player_code"].map(usual)
+
+
 def rescore() -> None:
-    """Recompute fantasy points on the saved tables (after a rules change)."""
+    """Recompute derived columns on the saved tables (after a rules change), no downloads."""
     pg = pd.read_parquet(PROCESSED_DIR / "player_games.parquet")
     tg = pd.read_parquet(PROCESSED_DIR / "team_games.parquet")
+    people = pd.read_parquet(PROCESSED_DIR / "people.parquet")
     add_fantasy_scores(pg, tg)
+    fill_positions(pg, people)
     pg.to_parquet(PROCESSED_DIR / "player_games.parquet", index=False)
     tg.to_parquet(PROCESSED_DIR / "team_games.parquet", index=False)
-    log.info("rescored %d player rows and %d team rows", len(pg), len(tg))
+    log.info("rescored %d player rows and %d team rows; positions missing: %.2f%%",
+             len(pg), len(tg), 100 * pg["position_name"].isna().mean())
 
 
 def qa_report(player_games: pd.DataFrame, failures: list) -> None:
