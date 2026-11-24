@@ -124,8 +124,11 @@ def prediction_metrics(df: pd.DataFrame, pred_cols: list[str]) -> pd.DataFrame:
 
 # --------------------------------------------------------------- squad simulation
 
-def squad_simulation(df: pd.DataFrame, coach_rows: pd.DataFrame, pred_cols: list[str]) -> pd.DataFrame:
+def squad_simulation(
+    df: pd.DataFrame, coach_rows: pd.DataFrame, pred_cols: list[str], pools: dict[str, list[str]] | None = None
+) -> pd.DataFrame:
     """Best 11 per round (budget 100) for each prediction column and pool, vs hindsight."""
+    pools = pools or {"prev": pred_cols, "played": pred_cols}
     out = []
     for r, R in df.groupby("round"):
         R = R.dropna(subset=["price", "pos"]).drop_duplicates("player_code").set_index("player_code")
@@ -137,9 +140,9 @@ def squad_simulation(df: pd.DataFrame, coach_rows: pd.DataFrame, pred_cols: list
         oracle = best_squad(played.assign(exp=played["y_fantasy_pts"]), C.assign(exp=C["coach_actual"]))
         best = squad_points(oracle, actual, oracle.coach["coach_actual"])
         out.append({"round": r, "pool": "hindsight", "method": "oracle", "points": best})
-        for pool in ("prev", "played"):
+        for pool, cols in pools.items():
             P = R[R[f"pool_{pool}"]]
-            for col in pred_cols:
+            for col in cols:
                 res = best_squad(P.assign(exp=P[col]), C.assign(exp=C["coach_pred"]))
                 if res.status != "Optimal":
                     continue

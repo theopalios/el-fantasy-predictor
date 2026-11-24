@@ -60,3 +60,7 @@ pip install -e ".[model,dev]" tabulate
 ```bash
 python -m elfantasy.backtest.walkforward   # baselines, round by round; writes docs/backtest_baselines.md
 ```
+
+```bash
+python -m elfantasy.backtest.models        # trained models vs baselines, 4-season squad simulation; writes docs/backtest_models.md
+```
