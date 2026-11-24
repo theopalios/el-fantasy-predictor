@@ -16,6 +16,7 @@ our availability model.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -110,15 +111,16 @@ class Recommendation:
         return pd.DataFrame(self.explanations.get(pid, []), columns=["feature", "value", "effect_pts", "meaning"])
 
     # ------------------------------------------------------------------ export
-    def to_markdown(self) -> str:
+    def to_markdown(self, banner: str | None = None) -> str:
         def md(df: pd.DataFrame) -> str:
             return df.to_markdown(index=False, floatfmt=".2f")
 
         sq = self.squad_table()
         c = self.coach_pick()
         lines = [
-            f"# Round {self.matchday} recommendation",
+            f"# Round {self.matchday} recommendation" + (" (DRY RUN)" if banner else ""),
             "",
+            *([f"> {banner}", ""] if banner else []),
             f"Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC. Deadline (first tip-off): "
             f"{self.deadline:%a %d %b %H:%M} UTC. Budget {self.budget:.1f} credits, squad cost {self.squad.cost:.1f}.",
             "",
@@ -153,12 +155,40 @@ class Recommendation:
             lines += ["## Notes", ""] + [f"- {n}" for n in self.notes] + [""]
         return "\n".join(lines)
 
-    def save(self, folder: Path | None = None) -> Path:
+    def to_record(self) -> dict:
+        """Machine-readable summary, used by `python -m elfantasy.evaluate` after the round."""
+        sq = self.squad.players
+        c = self.squad.coach
+        return {
+            "season": current_season_year(),
+            "matchday": int(self.matchday),
+            "generated_utc": datetime.now(timezone.utc).isoformat(),
+            "deadline_utc": self.deadline.isoformat() if self.deadline is not None else None,
+            "budget": float(self.budget),
+            "cost": float(self.squad.cost),
+            "expected_total": float(self.squad.objective),
+            "squad": [
+                {"player_id": int(pid), "name": r["name"], "team": r["team"], "pos": r["pos"],
+                 "price": float(r["price"]), "role": r["role"], "captain": bool(r["captain"]),
+                 "exp_pts": float(r["exp_pts"]), "p_play": float(r["p_play"])}
+                for pid, r in sq.iterrows()
+            ],
+            "coach": {"player_id": int(c.name), "name": c["name"], "team": c["team"],
+                      "price": float(c["price"]), "exp_pts": float(c["exp_pts"])},
+            "notes": self.notes,
+        }
+
+    def save(self, folder: Path | None = None, suffix: str = "", banner: str | None = None) -> Path:
+        """Write the markdown report and a JSON record side by side; returns the .md path.
+        `banner` marks a dry run (shown at the top of the report)."""
         year = current_season_year()
         folder = folder or REPO_ROOT / "recommendations" / f"{year}-{str(year + 1)[-2:]}"
         folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"md{self.matchday:02d}_{datetime.now(timezone.utc):%Y%m%dT%H%MZ}.md"
-        path.write_text(self.to_markdown(), encoding="utf-8")
+        stem = f"md{self.matchday:02d}_{datetime.now(timezone.utc):%Y%m%dT%H%MZ}{suffix}"
+        path = folder / f"{stem}.md"
+        path.write_text(self.to_markdown(banner), encoding="utf-8")
+        record = self.to_record() | ({"dry_run": banner} if banner else {})
+        (folder / f"{stem}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         return path
 
 

@@ -22,6 +22,8 @@ scores.
 
 ## Weekly picks
 
+**Step-by-step instructions: [docs/RUNNING.md](docs/RUNNING.md).**
+
 Before each round's deadline, open `notebooks/weekly_picks.ipynb`, adjust the settings cell and
 **Run all**. You can set your budget, players you know are out, and optionally your roster to get
 trades. It refreshes the data, trains the models on all history (~1 min) and shows:
