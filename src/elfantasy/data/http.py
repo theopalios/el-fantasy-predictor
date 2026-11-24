@@ -47,6 +47,10 @@ class HttpClient:
         host = urlsplit(url).netloc.replace(":", "_")
         return self.cache_dir / host / digest[:2] / f"{digest}.json"
 
+    def is_cached(self, url: str, params: dict[str, Any] | None = None) -> bool:
+        path = self._cache_path(url, params)
+        return path is not None and path.exists()
+
     # ---------------------------------------------------------------- request
     def _throttle(self) -> None:
         with self._lock:

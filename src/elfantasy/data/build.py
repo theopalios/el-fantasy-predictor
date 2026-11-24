@@ -16,7 +16,10 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from elfantasy.data.euroleague import (
+    LIVE,
+    V2,
     EuroLeagueAPI,
+    season_code,
     add_game_context,
     parse_boxscore,
     parse_game_stats,
@@ -38,12 +41,21 @@ def current_season_year(today: datetime | None = None) -> int:
     return today.year if today.month >= 7 else today.year - 1
 
 
+def _v2_url(year: int, gamecode: int) -> tuple[str, None]:
+    return (f"{V2}/competitions/E/seasons/{season_code(year)}/games/{gamecode}/stats", None)
+
+
+def _legacy_req(year: int, gamecode: int) -> tuple[str, dict]:
+    return (f"{LIVE}/Boxscore", {"gamecode": gamecode, "seasoncode": season_code(year)})
+
+
 def build_euroleague(
     first: int = FIRST_SEASON,
     last: int | None = None,
     refresh_days: int = 3,
     workers: int = 2,
     min_interval: float = 0.5,
+    prefer_legacy: bool = False,
 ) -> dict[str, pd.DataFrame]:
     # The API rate-limits bursts (~2,000 requests in 10 min triggered a 5-min block), so the
     # default pace is ~2 requests/s. Everything fetched is cached, so re-runs are cheap.
@@ -51,6 +63,9 @@ def build_euroleague(
     last = last if last is not None else cur
     http = HttpClient(cache_dir=RAW_CACHE_DIR, min_interval=min_interval)
     api = EuroLeagueAPI(http)
+    # The legacy box-score host is slower (~2.5 s/request) but rate-limited separately,
+    # so it gets its own client and pacing.
+    legacy_api = EuroLeagueAPI(HttpClient(cache_dir=RAW_CACHE_DIR, min_interval=0.4, max_retries=3))
     now = datetime.now(timezone.utc)
 
     games_l, players_l, teams_l, people_l, failures = [], [], [], [], []
@@ -61,15 +76,28 @@ def build_euroleague(
         played = games[games["played"]]
         log.info("season %s-%s: %d games (%d played)", year, str(year + 1)[-2:], len(games), len(played))
 
+        def fetch_v2(g, recent):
+            raw = api.game_stats(year, g.gamecode, cache=not recent)
+            return parse_game_stats(raw, year, g.gamecode, g.home_team, g.away_team)
+
+        def fetch_legacy(g, recent):
+            box = legacy_api.boxscore(year, g.gamecode, cache=not recent)
+            return parse_boxscore(box, year, g.gamecode)
+
         def fetch(g):
             recent = is_current and (now - g.date_utc.to_pydatetime()) < timedelta(days=refresh_days)
+            # A game already cached from either source is reused without a request.
+            order = (fetch_legacy, fetch_v2) if prefer_legacy else (fetch_v2, fetch_legacy)
+            if not recent:
+                for fn, cached in ((fetch_v2, api.http.is_cached(*_v2_url(year, g.gamecode))),
+                                   (fetch_legacy, legacy_api.http.is_cached(*_legacy_req(year, g.gamecode)))):
+                    if cached:
+                        return fn(g, recent)
             try:
-                raw = api.game_stats(year, g.gamecode, cache=not recent)
-                return parse_game_stats(raw, year, g.gamecode, g.home_team, g.away_team)
-            except Exception as exc:  # fall back to the legacy box score endpoint
-                log.warning("v2 stats %s/%s failed (%s); trying legacy box score", year, g.gamecode, exc)
-                box = api.boxscore(year, g.gamecode, cache=not recent)
-                return parse_boxscore(box, year, g.gamecode)
+                return order[0](g, recent)
+            except Exception as exc:
+                log.warning("%s %s/%s failed (%s); trying the other source", order[0].__name__, year, g.gamecode, exc)
+                return order[1](g, recent)
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(fetch, g): g.gamecode for g in played.itertuples(index=False)}
@@ -157,13 +185,15 @@ def main() -> None:
     ap.add_argument("--refresh-days", type=int, default=3, help="re-fetch box scores of games played in the last N days")
     ap.add_argument("--workers", type=int, default=2, help="parallel requests (keep small: public API)")
     ap.add_argument("--min-interval", type=float, default=0.5, help="seconds between request starts")
+    ap.add_argument("--prefer-legacy", action="store_true",
+                    help="fetch box scores from the legacy endpoint first (use when v2 is rate-limited)")
     ap.add_argument("--rescore-only", action="store_true", help="only recompute fantasy points on saved tables")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if args.rescore_only:
         rescore()
         return
-    build_euroleague(args.first, args.last, args.refresh_days, args.workers, args.min_interval)
+    build_euroleague(args.first, args.last, args.refresh_days, args.workers, args.min_interval, args.prefer_legacy)
 
 
 if __name__ == "__main__":
