@@ -39,11 +39,17 @@ def current_season_year(today: datetime | None = None) -> int:
 
 
 def build_euroleague(
-    first: int = FIRST_SEASON, last: int | None = None, refresh_days: int = 3, workers: int = 3
+    first: int = FIRST_SEASON,
+    last: int | None = None,
+    refresh_days: int = 3,
+    workers: int = 2,
+    min_interval: float = 0.5,
 ) -> dict[str, pd.DataFrame]:
+    # The API rate-limits bursts (~2,000 requests in 10 min triggered a 5-min block), so the
+    # default pace is ~2 requests/s. Everything fetched is cached, so re-runs are cheap.
     cur = current_season_year()
     last = last if last is not None else cur
-    http = HttpClient(cache_dir=RAW_CACHE_DIR, min_interval=0.25)
+    http = HttpClient(cache_dir=RAW_CACHE_DIR, min_interval=min_interval)
     api = EuroLeagueAPI(http)
     now = datetime.now(timezone.utc)
 
@@ -149,14 +155,15 @@ def main() -> None:
     ap.add_argument("--first", type=int, default=FIRST_SEASON, help="first season start year (default 2016)")
     ap.add_argument("--last", type=int, default=None, help="last season start year (default current)")
     ap.add_argument("--refresh-days", type=int, default=3, help="re-fetch box scores of games played in the last N days")
-    ap.add_argument("--workers", type=int, default=3, help="parallel requests (keep small: public API)")
+    ap.add_argument("--workers", type=int, default=2, help="parallel requests (keep small: public API)")
+    ap.add_argument("--min-interval", type=float, default=0.5, help="seconds between request starts")
     ap.add_argument("--rescore-only", action="store_true", help="only recompute fantasy points on saved tables")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     if args.rescore_only:
         rescore()
         return
-    build_euroleague(args.first, args.last, args.refresh_days, args.workers)
+    build_euroleague(args.first, args.last, args.refresh_days, args.workers, args.min_interval)
 
 
 if __name__ == "__main__":

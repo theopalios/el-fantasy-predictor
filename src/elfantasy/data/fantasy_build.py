@@ -41,7 +41,8 @@ _SUFFIXES = {"JR", "SR", "II", "III", "IV", "V"}
 
 def norm_name(s: str | None) -> str:
     s = unidecode(s or "").upper()
-    s = re.sub(r"[^A-Z ]+", " ", s)
+    s = re.sub(r"['.`]", "", s)          # M'baye -> MBAYE, J.J. -> JJ
+    s = re.sub(r"[^A-Z ]+", " ", s)      # hyphens etc. -> space
     return " ".join(t for t in s.split() if t not in _SUFFIXES)
 
 
@@ -93,11 +94,14 @@ def map_players(app_players: pd.DataFrame, el_people: pd.DataFrame, team_map: pd
                 method = method_name
                 break
         if method is None and len(pool):
-            target = f"{first} {last}".strip()
-            scores = pool["full"].apply(lambda f: difflib.SequenceMatcher(None, f, target).ratio())
-            if scores.max() >= 0.8:
-                hit = pool.loc[[scores.idxmax()]]
-                method = f"fuzzy:{scores.max():.2f}"
+            # Fuzzy only on the surname, and the first initial must agree, so that e.g.
+            # MIJAILOVIC never pairs with DANILOVIC just because both are called Uros.
+            same_initial = pool[pool["first"].str[:1] == first[:1]]
+            if len(same_initial):
+                scores = same_initial["last"].apply(lambda l: difflib.SequenceMatcher(None, l, last).ratio())
+                if scores.max() >= 0.85:
+                    hit = same_initial.loc[[scores.idxmax()]]
+                    method = f"fuzzy:{scores.max():.2f}"
         out.append(
             {
                 "player_id": p.player_id,

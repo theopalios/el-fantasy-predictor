@@ -17,6 +17,25 @@ def test_names():
     assert split_el_name("KABENGELE, MFIONDU") == ("KABENGELE", "MFIONDU")
     assert norm_name("Jimmy Clark III") == "JIMMY CLARK"
     assert norm_name("Džanan Musa") == "DZANAN MUSA"
+    assert norm_name("Amath M'baye") == "AMATH MBAYE"
+
+
+def test_map_players_rejects_wrong_surname():
+    import pandas as pd
+    from elfantasy.data.fantasy_build import map_players
+
+    app = pd.DataFrame([
+        {"player_id": 1, "first_name": "Uros", "last_name": "Mijailovic", "position": "Guard", "team_abbr": "CZV"},
+        {"player_id": 2, "first_name": "Amath", "last_name": "M'baye", "position": "Forward", "team_abbr": "CZV"},
+    ])
+    people = pd.DataFrame([
+        {"club": "RED", "type": "J", "person_code": "A", "name": "DANILOVIC, UROS"},
+        {"club": "RED", "type": "J", "person_code": "B", "name": "MBAYE, AMATH"},
+    ])
+    tmap = pd.DataFrame([{"app_abbr": "CZV", "el_code": "RED"}])
+    out = map_players(app, people, tmap).set_index("player_id")
+    assert pd.isna(out.loc[1, "person_code"])
+    assert out.loc[2, "person_code"] == "B"
 
 
 def _player(code, name, seconds, starter, **stats):
