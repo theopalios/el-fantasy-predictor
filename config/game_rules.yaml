@@ -20,7 +20,9 @@ squad:
     C: 2
   head_coaches: 1
   max_players_per_real_team: 6      # same in playoffs
-  coach_counts_toward_team_limit: false   # TODO(confirm)
+  # TODO(confirm). The app models the coach as an 11th "player" with a team, so it may count.
+  # "unknown" is treated as counting (the stricter rule): a squad valid under it is valid either way.
+  coach_counts_toward_team_limit: unknown
 
 lineup:
   starters: 5
@@ -60,14 +62,16 @@ scoring:
     fouls_committed: -1
     missed_field_goals: -1
     missed_free_throws: -1
-    team_win_bonus_pct: 10          # +10% of the player's fantasy score in a team win
-    win_bonus_on_negative_score: unknown   # TODO(confirm): is a negative score multiplied by 1.1 too?
+    team_win_bonus_pct: 10          # in a team win: score + 10% of |score|
+    # Verified against app fantasy points for 2026-27 R1-R13 (2,914 player-rounds, 100% match):
+    # the bonus is 10% of the ABSOLUTE score, so a negative score rises (-2 -> -1.8).
+    win_bonus_mode: absolute
     did_not_play: 0
   head_coach:
     # Margin is the final score difference from the coach's team's perspective.
     # Any overtime game falls into the closest bucket (win +10 / loss -5).
-    # The official table lists 11-20 -> 20 and "20+" -> 25; we treat a margin of
-    # exactly 20 as the 11-20 bucket. TODO(confirm)
+    # Verified against app coach points for 2026-27 R1-R13: margin 20 -> +20, -20 -> -10,
+    # 21 -> +25, -21 -> -20, all overtime games -> +10 / -5.
     buckets:
       - {result: win,  margin_min: 1,  margin_max: 10,   points: 10}
       - {result: win,  margin_min: 11, margin_max: 20,   points: 20}

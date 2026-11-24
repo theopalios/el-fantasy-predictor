@@ -1,8 +1,8 @@
-# EuroLeague Fantasy Predictor: Design v0.1
+# EuroLeague Fantasy Predictor: Design v0.2
 
-*Status: draft for review, 24 Nov 2026. Nothing is trained yet. This document fixes the
-variables, the model structure, the game rules and the weekly prediction flow. Training
-starts once it is agreed.*
+*Status: design agreed, 24 Nov 2026. The data layer (M0/M1) is built; nothing is trained
+yet. v0.2 adds the user's answers (generic recommendations, no paid data, token optional)
+and what we learned from the data (verified scoring rules, public app endpoints).*
 
 ---
 
@@ -10,25 +10,28 @@ starts once it is agreed.*
 
 Each round, the system predicts every player's and coach's **expected fantasy score**.
 An **integer-programming optimizer** then picks the squad that maximizes total expected
-points under the game's rules. It runs in two modes:
+points under the game's rules. The recommendations are **generic, not tied to any
+fantasy team**:
 
-* **Mode A: from my roster.** The best ≤4 trades from your current team, plus starting
-  five, sixth man, bench and captain. Trades are unlimited in the open windows and the
-  playoffs.
-* **Mode B: fresh 11.** The best 10 players + coach from scratch within the budget. Used
-  for unlimited-trade windows and as a benchmark.
+* **Main output: the best 11.** The best 10 players + coach within the budget (100 credits
+  by default, adjustable), with starting five, sixth man, bench and captain.
+* **Rankings any manager can use:** expected points and points per credit by position, a
+  captain shortlist and a coach ranking.
+* **Optional:** paste any roster and get the best ≤4 trades from it. This is not linked
+  to an account.
 
 The prediction is built from three components:
 
 1. **Game model.** Predicts the margin of each game. From that we get the win probability
-   (for the +10% win bonus) and the coach's expected points. Inputs: betting odds blended
-   with our own team ratings.
+   (for the +10% win bonus) and the coach's expected points. It is trained on our own
+   team ratings, because there is no free historical odds data. Free live odds can be
+   blended in at prediction time.
 2. **Availability model.** The probability that the player plays (injuries, rest,
-   coach's choice).
+   coach's choice). The app publishes its own probability of playing for every player.
 3. **Player points model.** Expected PIR *given that he plays*. A gradient-boosted model
    on form, role, opponent and game-context variables.
 
-`E[fantasy pts] = P(plays) × E[PIR | plays] × (1 + 0.10 × P(team wins))`
+`E[fantasy pts] ≈ P(plays) × E[PIR | plays] × (1 + 0.10 × P(team wins))` (exact form in §3)
 
 Delivery is a Jupyter notebook. The MVP goes live this season.
 
@@ -38,9 +41,10 @@ Delivery is a Jupyter notebook. The MVP goes live this season.
 
 | Topic | Decision |
 |---|---|
-| Output | Both modes: trades from current roster (main) + fresh optimal 11 (benchmark / unlimited windows) |
-| Fantasy prices, positions, injury flags | Pulled from the fantasy app's API (fantaking/Dunkest backend) with the user's login; start storing history now |
-| Betting odds | Used as an input (spread + total per game) |
+| Output | **Generic recommendations, not for a specific team** (v0.2): best 11 + rankings; trades only for a pasted roster |
+| Fantasy prices, positions, injury flags | Pulled from the fantasy app's backend (fantaking/Dunkest). Most of it turned out to be **public** (§8). The login token (`ELF_FANTASY_TOKEN`) is optional and only adds in-app odds and the injury list. |
+| Betting odds | **No paid data** (v0.2). No free historical EuroLeague odds dataset exists (§8), so models train on our own team ratings. Free live odds are blended in at prediction time and stored from now on. |
+| Training seasons | 2016-17 onward (confirmed) |
 | Objective | Overall season ranking → **risk-neutral**: maximize expected points |
 | Price changes / team value | **Ignored in the objective** (points only). Prices still set the budget constraint. |
 | In-round turns | **Pre-round only**: one lineup + captain before the round, no swap logic between game days |
@@ -60,7 +64,9 @@ that matter for modelling:
 * **Lineup:** 5 starters in one of the formations 2-2-1, 1-2-2, 2-1-2, 1-3-1, 3-1-1 (G-F-C).
   The starters, the **sixth man** and the coach score 100%. The other **4 bench players
   score 50%**. The **captain** (a starter) scores ×2.
-* **Player score = PIR × 1.10 if his team wins.** PIR is exactly the official "Valuation"
+* **Player score = PIR + 10% of |PIR| if his team wins.** A negative score therefore rises:
+  −2 becomes −1.8. This was verified against the app on all 2,914 player-rounds of 2026-27
+  R1–R13, with 100% match. PIR is exactly the official "Valuation"
   in EuroLeague box scores, so historical targets can be computed from public data.
   Checked on a real line (Shane Larkin, 2025-26 R1): (14 pts + 4 reb + 5 ast + 0 stl +
   0 blk + 4 fouls drawn) − (7 missed FG + 2 missed FT + 2 TOV + 1 blocked + 3 fouls) = 12,
@@ -79,11 +85,16 @@ that matter for modelling:
 * **Prices** change after every round, driven by the score and the starting price. The
   exact formula is not public. Selling refunds the current price.
 
-Rules still to confirm in the app (marked `TODO(confirm)` in the YAML):
+Rule checks:
 
-* Does the coach count toward the 6-per-team limit?
-* Is the 10% win bonus also applied to negative scores?
-* Does a margin of exactly 20 fall in the 11–20 bucket?
+* **Win bonus on negative scores:** verified. It is 10% of the absolute score (see above).
+* **Margin of exactly 20:** verified from app coach points. 20 → +20, −20 → −10, 21 → +25,
+  and every overtime game → +10/−5.
+* **Coach in the 6-per-team limit:** still unknown. The app models the coach as an 11th
+  "player" with a team, so the optimizer **counts the coach** (the stricter rule). A squad
+  valid under the strict rule is valid either way.
+* Also confirmed from the app config: captain ×2, max 6 per club, 5 bench slots
+  (sixth man + 4).
 
 ---
 
@@ -92,8 +103,8 @@ Rules still to confirm in the app (marked `TODO(confirm)` in the YAML):
 For player *i* in round *r*:
 
 ```
-FP_i,r = 0                               if he does not play
-       = PIR_i,r × (1.10 if team wins else 1.00)   otherwise
+FP_i,r = 0                                    if he does not play
+       = PIR_i,r + 0.10·|PIR_i,r|·[team wins]  otherwise
 ```
 
 We split this into components that we model separately:
@@ -108,7 +119,7 @@ Combined:
 
 ```
 p_win      = Φ(μ_g / σ_g)
-E[FP_i]    = p_play × μ_pir × (1 + 0.10 × p_win)
+E[FP_i]    = p_play × (μ_pir + 0.10 × p_win × E|PIR|)     (≈ μ_pir·(1 + 0.10·p_win) when μ_pir ≫ 0)
 E[Coach_k] = Σ_buckets points_b × P(M ∈ bucket_b)
 ```
 
@@ -124,9 +135,9 @@ separately.
 ```mermaid
 flowchart LR
   subgraph Sources
-    EL[EuroLeague stats API<br/>schedule, box scores]
-    FA[Fantasy app API<br/>prices, positions, status, popularity, my roster]
-    OD[Odds API<br/>spread, total]
+    EL[EuroLeague stats API<br/>schedule, box scores, rosters]
+    FA[Fantasy app API<br/>prices, positions, P plays, projected lineups, ownership]
+    OD[Free live odds<br/>in-app odds with token, optional free-tier API]
     MO[Manual overrides<br/>injury news, lock/exclude]
   end
   EL --> DB[(DuckDB / Parquet store)]
@@ -142,8 +153,9 @@ flowchart LR
   AV --> EP
   PM --> EP
   EP --> OPT[ILP optimizer<br/>rules from game_rules.yaml]
-  OPT --> A[Mode A: trades + lineup + captain]
-  OPT --> B[Mode B: fresh 11]
+  EP --> RK[Rankings by position,<br/>captain shortlist, coaches]
+  OPT --> B[Best 11 + lineup + captain]
+  OPT -.optional.-> A[Trades for a pasted roster]
 ```
 
 ---
@@ -220,7 +232,9 @@ exists or the MVP is stable.
 
 | Variable | Definition | Phase |
 |---|---|---|
-| `app_status` | Injured flag / status from the fantasy app (snapshot before the deadline) | MVP (live only) |
+| `app_p_play` | The app's own probability of playing (0 / 0.25 / 0.5 / 1), from the pre-deadline snapshot | MVP (live; history only from our snapshots) |
+| `app_projected_status` | App's projected starter / bench / out | MVP (live; history only from snapshots) |
+| `app_injured` | Injured flag from the player profile | MVP (live) |
 | `manual_status` | Your override in the notebook: OUT / DOUBTFUL / PROBABLE / FIT | MVP |
 | `missed_streak` | Consecutive team games missed | MVP |
 | `dnp_rate_season` | Share of team games missed this season | MVP |
@@ -237,9 +251,9 @@ exists or the MVP is stable.
 
 | Variable | Definition | Phase |
 |---|---|---|
-| `price` | Current credit value. In the MVP it is used as the **prior for cold starts** (§6.4), not as a direct model feature, because historical prices don't exist for older seasons. | MVP (prior) |
-| `popularity` | % of fantasy teams owning the player (crowd signal) | v2 |
-| `price_delta_l1`, `price_delta_l3` | Recent price moves | v2 |
+| `price` | Credit value before the round. The app's match log gives the **real per-round price history for 2026-27**; older seasons have none. Used as the **prior for cold starts** (§6.4) and as a feature in a 2026-27 correction model. | MVP (prior) |
+| `popularity` | % of fantasy teams owning the player (crowd signal); from the profile endpoint, history from our snapshots | v2 |
+| `price_delta_l1`, `price_delta_l3` | Recent price moves (match log `PLUS` column) | v2 |
 | `app_avg_fantasy_pts` | App's own season average, used as a sanity check against our computed target | MVP (QA only) |
 
 ### H. Static
@@ -260,27 +274,35 @@ exists or the MVP is stable.
   The home-court value, the coefficients and `σ_g` are fitted on history. `injury_adj`
   uses the vacated minutes weighted by player quality.
 * Market estimate: `μ_mkt = −spread`. The spread is already a margin forecast, so it
-  needs **no historical training to be useful**.
-* Blend: `μ_g = w·μ_mkt + (1−w)·μ_own`. `w` is fitted on the games where odds exist and
-  starts high (~0.8). Without odds, `w = 0`.
+  needs **no historical training to be useful**. This matters because there is no free
+  historical EuroLeague odds data.
+* Blend: `μ_g = w·μ_mkt + (1−w)·μ_own`. `w` starts at a fixed ~0.7 when live odds are
+  available and is re-fitted once enough rounds of stored odds exist. Without odds,
+  `w = 0`.
+* **Training without odds:** the player model's game-context features (`exp_margin`,
+  `p_win`, `team_exp_points`) come from `μ_own` in training. At prediction time they come
+  from the blend. Because the blend is better calibrated, the train/serve shift is small
+  and in the safe direction.
 * Outputs: `p_win = Φ(μ_g/σ_g)`, `team_exp_points`, and the coach's expected points from
   the bucket table above.
 * Checks: Brier score / log-loss of `p_win`, MAE of the margin, and calibration plots.
 
 ### 6.2 Availability model `P(plays)`
 
-There is **no historical record of pre-game injury flags**, so the MVP uses rules plus a
-simple learned component:
+The app publishes a **probability of playing** for every player (0, 0.25, 0.5 or 1) and a
+projected starter/bench/out status. There is **no history** of either: past matches show
+today's projection, which we verified. The only history is the snapshots we collect from
+Round 14 onward. The MVP therefore combines:
 
-| Status (app flag or manual override) | `p_play` |
+| Input | Use |
 |---|---|
-| OUT / injured | 0.00 |
-| DOUBTFUL | 0.30 |
-| PROBABLE / questionable | 0.75 |
-| FIT | from a small logistic model on `missed_streak`, `dnp_rate_season`, `rotation_rank`, `first_game_back`, trained on box-score history (who on the roster didn't play) |
+| Manual override (OUT / DOUBTFUL / PROBABLE / FIT) | Wins over everything: 0 / 0.30 / 0.75 / model |
+| App `p_play` = 0 or injured flag | 0.00 |
+| App `p_play` = 0.25 / 0.5 | Used as-is, then recalibrated once snapshots accumulate |
+| App `p_play` = 1 | A small logistic model on `missed_streak`, `dnp_rate_season`, `rotation_rank` and `first_game_back`, trained on box-score history (who was dressed but didn't play) |
 
-The probabilities in the table are starting values. Once we have a season of stored app
-statuses matched to who actually played, a learned model replaces the rules (v2).
+After ~10 rounds of snapshots matched to who actually played, a learned calibration of
+the app's probabilities replaces the fixed mapping (v2).
 
 ### 6.3 Player points model `E[PIR | plays]`
 
@@ -353,16 +375,21 @@ The captain term `+c_i` adds the second copy of the captain's score.
 | Team limit | Σ_{i ∈ team t} x_i ≤ 6 for every real team t |
 | User locks/excludes | x_i = 1 / x_i = 0 |
 
-**Mode A (from my roster):**
+**Main mode (generic best 11):** the model above with `budget` = 100 credits by default.
+Managers whose team value has grown can raise it in the notebook. The notebook also
+lists:
 
-* `budget = bank + Σ current prices of my squad`.
-* Trades: `Σ_{i ∉ roster} x_i + Σ_{k ≠ my coach} h_k ≤ 4`. The limit is removed in
+* the top players per position by expected points and by expected points per credit
+* the 5 best captain options
+* all 20 coaches ranked
+
+**Optional roster mode (any pasted roster, no account link):**
+
+* `budget = bank + Σ current prices of the roster`.
+* Trades: `Σ_{i ∉ roster} x_i + Σ_{k ≠ roster coach} h_k ≤ 4`. The limit is removed in
   unlimited windows.
 * A trade is only made if it improves expected points by more than a threshold `ε`
   (default 1.0 pt), to avoid churning on noise.
-
-**Mode B (fresh 11):** same model without the trade constraint. `budget` = 100, or the
-current team value when used in an unlimited window.
 
 **Optional lookahead (to test in the backtest):** with only 4 trades per round, a player
 with three good matchups ahead can beat one with a single great matchup. A rolling
@@ -374,11 +401,13 @@ H = 3 on simulated seasons.
 
 ## 8. Data sources and pipeline
 
-| Source | What | Access (checked 24 Nov 2026) |
+| Source | What | Access (verified 24 Nov 2026) |
 |---|---|---|
-| EuroLeague stats API (`api-live.euroleague.net/v2`, `live.euroleague.net/api`) | Schedule, results, per-player box scores with every PIR component plus `IsStarter`, minutes, ± | **Public, works.** 2026-27 data is available through Round 13. |
-| Fantasy app backend (`fantaking-api.dunkest.com/api/v1`, league 10) | Player list, fantasy positions, prices ("quotation"), injury flag, popularity, fantasy points per round, my roster and bank, in-app odds | `/leagues/10/config` and `/players/{id}/profile` are public. The full player table, matchdays and fantasy teams need **your login token**. |
-| Odds | Spread + total per game | Options: the odds the fantasy app itself shows (`/odds/matches/{id}`), or an odds API that covers EuroLeague. Historical odds are usually a paid feature. |
+| EuroLeague stats API: `v2/.../games` (schedule, results, OT), `v2/.../games/{code}/stats` (box score), `v2/.../clubs/{club}/people` (rosters with position, height, birth date, tenure dates; head coaches) | Every PIR component, minutes, starter flag, ±, coach of record | **Public.** 2016-17 → 2026-27 R13 downloaded (`python -m elfantasy.data.build`). The v2 stats endpoint is 4× faster than the legacy `Boxscore` and carries roster codes. |
+| Fantasy app, **public** endpoints (league 10): `config`, `schedules/{s}/matchdays/{md}`, `matches/{id}/lineups`, `basketball/leagues/10/players/{id}/match-log/rendered`, `players/{id}/trend`, `players/{id}/profile` | Fantasy position, price, projected starter/bench/out, **probability of playing**, per-round **price history** (price before the round + change), fantasy points, ownership, injured flag; coaches included | **Public, no login.** Current-season tables: `python -m elfantasy.data.fantasy_build`. Pre-deadline state: `python -m elfantasy.data.snapshot`. |
+| Fantasy app, login-only: `odds/matches/{id}`, `leagues/10/injuries` | In-app bookmaker odds, injury list | Optional `ELF_FANTASY_TOKEN` (environment variable). The snapshot collector saves them automatically when the token is set. |
+| Odds history | Closing spreads/totals | **No free dataset found.** The only EuroLeague odds set on Kaggle is a 50-row sample of a paid file, and odds APIs charge for history. We start our own history with the snapshots. |
+| Optional free live odds | Spread + total | A free-tier odds API key (no payment) could add live lines if the in-app odds are not enough. Not needed for the MVP. |
 | Manual overrides | Injury news not yet in the app, lock/exclude players | A cell in the weekly notebook |
 
 **Storage:** raw JSON cached on disk (so we never re-download history), normalized into
@@ -392,10 +421,12 @@ DuckDB/Parquet tables:
 * `odds_snapshots`
 * `overrides`
 
-**Urgent:** the fantasy app does not give back the history of prices and injury flags
-once a round has passed. The **snapshot collector should run every round starting now**,
-even before any model exists. That data becomes training data for the availability
-model and the market features.
+**Important:** price history can be recovered from the match logs, but the app's
+**probability of playing, projected lineups, injury flags and ownership cannot**. Past
+matches show only today's projection. The **snapshot collector must run before every
+round's deadline**. Its output is committed to `snapshots/`, because a cloud container is
+temporary and these files cannot be re-downloaded. The first snapshot (Round 14) was taken
+22 minutes before tip-off on 24 Nov 2026.
 
 ---
 
@@ -409,15 +440,15 @@ model and the market features.
   correlation within each round, and calibration of the p10/p90 bands.
 * **Game model metrics:** Brier score and log-loss of `p_win`, margin MAE, and coach-points MAE.
 * **Decision metric (the one that matters):** a **season simulation**. Start from the
-  Mode B squad at R1, then for each round let the optimizer make its ≤4 trades using
+  best-11 squad at R1, then for each round let the optimizer make its ≤4 trades using
   predictions, and score with actual results. We compare season totals across:
   * model vs the three baselines
   * horizon H = 1 / 2 / 3
   * trade threshold ε
-* **Historical prices problem:** prices don't exist for past seasons. For the simulation
-  we use a **synthetic price model** (price after round *r* as a function of the trailing
-  fantasy average and the previous price), fitted on 2026-27 prices from the app. From
-  2026-27 onward we use real prices.
+* **Historical prices problem:** prices don't exist for seasons before 2026-27. For those
+  simulations we use a **synthetic price model** (price after round *r* as a function of
+  the round's score and the previous price), fitted on the **real 2026-27 price history**
+  from the match logs (~5,000 player-rounds). 2026-27 itself is simulated with real prices.
 
 ---
 
@@ -426,15 +457,18 @@ model and the market features.
 `notebooks/weekly_picks.ipynb`, run after the previous round ends and before the next
 deadline:
 
-1. **Refresh:** new box scores, app snapshot (prices, status, my roster, bank), odds.
-2. **Overrides:** edit a small table (OUT / DOUBTFUL / FIT, lock, exclude).
+1. **Refresh:** new box scores, app snapshot (prices, P(plays), projected lineups,
+   ownership), odds if available.
+2. **Overrides:** edit a small table (OUT / DOUBTFUL / FIT, lock, exclude), and optionally
+   set the budget or paste a roster.
 3. **Predict:** game model → availability → player model → `E[FP]` for all players and coaches.
-4. **Optimize:** Mode A (trades) and Mode B (fresh 11).
+4. **Optimize:** the best 11 (and trades if a roster was pasted).
 5. **Report:**
-   * Trades in/out with the gain in expected points for each.
-   * Lineup, sixth man, bench and captain.
+   * Best 11 with lineup, sixth man, bench and captain.
+   * Rankings by position (points and points per credit), captain shortlist, coach ranking.
    * Projection table with p10/p50/p90.
    * Top feature contributions per pick (SHAP), so you can sanity-check the reasoning.
+   * Trades in/out with the gain for each, if a roster was pasted.
 6. **Log** the recommendation, and the actual result after the round, to track live
    performance.
 
@@ -444,10 +478,11 @@ deadline:
 
 ```
 config/
-  game_rules.yaml          # rules (done)
-  settings.example.yaml    # paths, model params; secrets live in .env (not committed)
+  game_rules.yaml          # rules, verified against app data (done)
 src/elfantasy/
-  data/      euroleague.py  fantasy_app.py  odds.py  store.py
+  rules.py  scoring.py  paths.py                                   (done)
+  data/      http.py  euroleague.py  build.py                      (done)
+             fantasy_app.py  fantasy_build.py  snapshot.py         (done)
   features/  player.py  team.py  opponent.py  context.py  build.py
   models/    game.py  availability.py  player_points.py  priors.py
   optimize/  squad.py
@@ -456,8 +491,9 @@ notebooks/
   01_data_exploration.ipynb
   02_backtest.ipynb
   weekly_picks.ipynb
+snapshots/                 # committed: pre-deadline app state per round (not recoverable later)
 tests/
-data/                      # gitignored: raw cache + DuckDB
+data/                      # gitignored: raw API cache + processed parquet (rebuildable)
 ```
 
 ---
@@ -466,27 +502,31 @@ data/                      # gitignored: raw cache + DuckDB
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Fantasy snapshot collector** running every round | Prices, status and popularity stored for each round from now on |
-| M1 | Data layer | All EuroLeague games and box scores 2016-17 → now in DuckDB; fantasy app client with your token; odds client |
+| M0 | **Fantasy snapshot collector** running every round | **Built**; first snapshot taken for R14. Still to do: run it automatically before every deadline. |
+| M1 | Data layer | **Built**: EuroLeague 2016-17 → now, current-season fantasy tables, team/player id maps, verified scoring |
 | M2 | Features + baselines + backtest harness | Walk-forward metrics for the 3 baselines |
 | M3 | Game model, player model, availability rules, ILP (both modes) | Model beats baselines in the walk-forward test and the season simulation |
-| M4 | Weekly notebook live | First real recommendation, ideally ready for the **unlimited window after R18 (19–22 Dec)**, where Mode B can rebuild the whole squad |
+| M4 | Weekly notebook live | First real recommendation, ideally ready for the **unlimited window after R18 (19–22 Dec)**, when anyone can rebuild their whole squad into the recommended 11 |
 | v2 | Learned availability, minutes × rate split, lookahead H>1, market features, fatigue/travel, domestic leagues | Each addition kept only if it improves the season simulation |
 
 ---
 
 ## 13. Open questions
 
-1. **Fantasy login:** how do you want to give access? Recommended: a token or credentials
-   in a local `.env` file, never committed. Also check that automated read access is
-   acceptable under the app's terms. We would make only a handful of requests per round.
-2. **Odds history:** are you OK paying for historical odds so the models can learn from
-   them? The alternative is live odds only: train on our own ratings and blend the market
-   spread in at prediction time, which needs no history.
-3. **Your team:** which of your fantasy teams (up to 3) should Mode A manage? Mode A needs
-   its id, or the current roster and bank.
-4. **Rule checks in the app:** the three `TODO(confirm)` items in §2.
-5. **Training window:** 2016-17 onward is the default. Any reason to go shorter or longer?
+Answered in v0.2:
+
+* Token: yes, but now optional.
+* Paid data: no.
+* Output: generic, not for a specific team.
+* Training seasons: from 2016-17.
+* Two of the three rule checks were resolved from data.
+
+Still open:
+
+1. **Automatic snapshots:** should the collector run on a schedule before each round
+   deadline, committing to the repo? Otherwise it must be run by hand each week.
+2. **Coach in the 6-per-club limit:** unresolved. We use the stricter rule, which is
+   always safe.
 
 ---
 
@@ -501,3 +541,5 @@ data/                      # gitignored: raw cache + DuckDB
 * Captain ×2 change (2025-26): <https://www.eurohoops.net/en/euroleague/1863394/euroleague-fantasy-upgrades/>
 * 2026-27 season overview: <https://basketballsphere.com/en/euroleague-fantasy/>,
   <https://www.dunkest.com/en/euroleague/news/fantasy-basketball/244469/euroleague-fantasy-2026-27-minutes-roles-and-schedule>
+* Odds data search: [Kaggle European Basketball & FIBA Betting Odds](https://www.kaggle.com/datasets/oliviersportsdata/european-basketball-and-fiba-betting-odds)
+  (50-row sample; full file paid), [odds-api.io historical](https://odds-api.io/historical-odds-api) (paid history)
