@@ -445,6 +445,18 @@ temporary and these files cannot be re-downloaded. The first snapshot (Round 14)
   * model vs the three baselines
   * horizon H = 1 / 2 / 3
   * trade threshold ε
+* **Two candidate pools per round** (implemented in `elfantasy.backtest.walkforward`):
+  * `prev`: players who played their team's previous game. This is what is known before
+    the deadline without injury news; anyone who then misses the game scores 0.
+  * `played`: players who actually played. This is "known availability", an upper bound.
+
+  The gap between the two pools measures what injury information is worth. The app's
+  `p_play` snapshots will close part of it.
+* **Known small leaks (accepted):**
+  * `vacated_min` uses who actually missed the game. At prediction time it comes from the
+    app's `p_play = 0` list, so it is the same information, slightly less precise.
+  * The league-average normaliser of defence-vs-position includes games played earlier in
+    the same round. Its effect is negligible (an average over the last ~300 team-games).
 * **Historical prices problem:** prices don't exist for seasons before 2026-27. For those
   simulations we use a **synthetic price model** (price after round *r* as a function of
   the round's score and the previous price), fitted on the **real 2026-27 price history**
@@ -504,7 +516,7 @@ data/                      # gitignored: raw API cache + processed parquet (rebu
 |---|---|---|
 | M0 | **Fantasy snapshot collector** running every round | **Done.** First snapshot taken for R14. Automated with GitHub Actions (`.github/workflows/snapshot.yml`), Tue–Fri 14:41 UTC; the earliest 2026-27 tip-off is 16:00 UTC. |
 | M1 | Data layer | **Built**: EuroLeague 2016-17 → now, current-season fantasy tables, team/player id maps, verified scoring |
-| M2 | Features + baselines + backtest harness | Walk-forward metrics for the 3 baselines |
+| M2 | Features + baselines + backtest harness | **Done** (see [backtest_baselines.md](backtest_baselines.md)). 118-column feature frame, leakage-tested. Bar to beat: MAE 5.95, within-round Spearman 0.46 (2023-26), and ~135 pts/round in the 2026-27 best-11 simulation (46% of hindsight). |
 | M3 | Game model, player model, availability rules, ILP (both modes) | Model beats baselines in the walk-forward test and the season simulation |
 | M4 | Weekly notebook live | First real recommendation, ideally ready for the **unlimited window after R18 (19–22 Dec)**, when anyone can rebuild their whole squad into the recommended 11 |
 | v2 | Learned availability, minutes × rate split, lookahead H>1, market features, fatigue/travel, domestic leagues | Each addition kept only if it improves the season simulation |

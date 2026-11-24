@@ -50,3 +50,13 @@ has no odds for EuroLeague and its injury list is empty.
 
 Processed tables go to `data/processed/*.parquet` (gitignored and rebuildable). Run the tests
 with `pytest`.
+
+## Backtest
+
+```bash
+pip install -e ".[model,dev]" tabulate
+```
+
+```bash
+python -m elfantasy.backtest.walkforward   # baselines, round by round; writes docs/backtest_baselines.md
+```
