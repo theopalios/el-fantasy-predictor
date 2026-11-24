@@ -528,16 +528,40 @@ data/                      # gitignored: raw API cache + processed parquet (rebu
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Fantasy snapshot collector** running every round | **Done.** First snapshot taken for R14. Automated with GitHub Actions (`.github/workflows/snapshot.yml`), Tue–Fri 14:41 UTC; the earliest 2026-27 tip-off is 16:00 UTC. |
+| M0 | **Fantasy snapshot collector** running every round | **Done.** First snapshot taken for R14. Automated with GitHub Actions (`.github/workflows/snapshot.yml`), daily at 10:41 and 14:41 UTC; unchanged snapshots are not saved. |
 | M1 | Data layer | **Built**: EuroLeague 2016-17 → now, current-season fantasy tables, team/player id maps, verified scoring |
 | M2 | Features + baselines + backtest harness | **Done** (see [backtest_baselines.md](backtest_baselines.md)). 118-column feature frame, leakage-tested. Bar to beat: MAE 5.95, within-round Spearman 0.46 (2023-26), and ~135 pts/round in the 2026-27 best-11 simulation (46% of hindsight). |
-| M3 | Game model, player model, availability rules, ILP (both modes) | **Done** (see [backtest_models.md](backtest_models.md)). On held-out seasons the player model beats every baseline: MAE 5.86 vs 5.99, ranking 0.50 vs 0.47. It does so in every season. Best-11 simulation over 4 seasons (realistic pool): **146 pts/round with model × availability vs 135 for the best baseline**, about +440 points over a 38-round season. The game model beats Elo for coach points in 3 of 4 seasons. Blending in the app's price did not help, so it is not used. |
+| M3 | Game model, player model, availability rules, ILP (both modes) | **Done** (see [backtest_models.md](backtest_models.md); numbers corrected after the 24 Nov review). Held-out player model: MAE 5.85 vs 5.99 (EWMA), ranking 0.50 vs 0.47, better in every season. Best-11 simulation over 4 seasons with no injury news: **149 pts/round (model × availability) vs 136 for the best baseline**, better in every season including 2026-27 with real prices. The availability model's own share is +1.8 pts/round; an earlier +7.7 came from a leak. Blending in the app's price did not help, so it is not used. |
 | M4 | Weekly notebook live | **Done.** `notebooks/weekly_picks.ipynb` and `python -m elfantasy.weekly`, ~1 min per run. Dry run for R15 saved in `recommendations/2026-27/`. The first real run is R15 (Thu 3 Dec, after the 14:41 UTC snapshot). The unlimited window after R18 (19–22 Dec) is the first chance to rebuild a whole squad into the recommended 11. |
 | v2 | Learned availability, minutes × rate split, lookahead H>1, market features, fatigue/travel, domestic leagues | Each addition kept only if it improves the season simulation |
 
 ---
 
-## 13. Open questions
+## 13. Review log (24 Nov 2026)
+
+An adversarial multi-agent review covered leakage, rules/optimizer, the live pipeline, data
+ingestion and model methodology. A fresh-clone test followed `docs/RUNNING.md`. Fixed:
+
+| Finding | Fix |
+|---|---|
+| **Critical:** `vacated_min` counted the player's own absence, leaking the availability label (+7.7 pts/round reported for availability was fake; live it marked down whole rosters) | Own minutes are removed from every row (backtest and live); regression test added |
+| Games moved out of their round score the season average and the captain is not doubled (official rule, not applied; R23 has such a game) | Detected from the schedule; those players/coaches get their season average and `captain_ok = False` in the optimizer |
+| Never-played games (cancelled, voided, not yet played) counted as "missed" in labels and streaks | Team-game index and streaks count only played games; candidates only for played games |
+| Results depended on row order (164.5 vs 160.1 on the same data) | Deterministic row order and fixed model seeds |
+| Roster mode showed the generic squad; tiny trades suggested; coach lock/exclude crashed; override did not clear vacated minutes | Post-trade squad shown and saved; 1-point minimum gain per trade; coaches resolvable; overrides respected |
+| Auto round picker could stick on a round with a postponed game | Picks the first round with no started game |
+| Final Four treated as home games | Neutral venue (`is_home = 0.5`, no home-court Elo) |
+| Rate-limit retries gave up early; failed downloads silently dropped games; off-season crash; one failed request lost a snapshot | Patient 429 handling; previous rows kept for failed games; empty seasons skipped; per-request error handling |
+| Snapshot schedule missed Sunday Final Four games and had one attempt per day | Twice daily, every day, with de-duplication |
+| Run-guide inaccuracies (10) and 3 command failures | Fixed (`--help` everywhere, friendly errors, `SAVE` setting, wording) |
+
+Not changed (documented caveats):
+
+* Postponed games are scored in their nominal round in the backtest (a handful of games).
+* Synthetic prices for 2023-24 to 2025-26 are fitted from form features. The 2026-27 season
+  with real prices shows the same edge, which suggests this does not drive the result.
+
+## 14. Open questions
 
 Answered in v0.2:
 

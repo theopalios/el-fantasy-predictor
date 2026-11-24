@@ -4,13 +4,14 @@ name: Fantasy snapshot
 # lineups, ownership, injured flags) and commits it to snapshots/. This data cannot be
 # fetched after a round starts, so it must be collected before every deadline.
 #
-# Round deadlines (first tip-off) in 2026-27 fall on Tue/Wed/Thu, never earlier than
-# 16:00 UTC. Running at 14:41 UTC leaves >1h margin for GitHub's cron delays.
-# Fridays are included for play-off weeks. Scheduled runs use the default branch.
+# Regular-season deadlines (first tip-off) fall on Tue/Wed/Thu, never earlier than 16:00 UTC;
+# play-offs and the Final Four also use Fridays and Sundays. The job runs twice a day, every
+# day (10:41 and 14:41 UTC), so a late change is caught and one failed run is not fatal.
+# Unchanged snapshots are not saved. Scheduled runs use the default branch.
 
 on:
   schedule:
-    - cron: "41 14 * * 2-5"
+    - cron: "41 10,14 * * *"
   workflow_dispatch: {}
 
 permissions:

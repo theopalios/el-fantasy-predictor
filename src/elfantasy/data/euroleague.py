@@ -82,7 +82,8 @@ def parse_games(raw: list[dict[str, Any]], year: int) -> pd.DataFrame:
                 "home_score": local.get("score"),
                 "away_score": road.get("score"),
                 "n_ot": max(_n_extra_periods(local.get("partials")), _n_extra_periods(road.get("partials"))),
-                "neutral_venue": bool(g.get("isNeutralVenue")),
+                # the Final Four is at a neutral venue even when the API does not flag it
+                "neutral_venue": bool(g.get("isNeutralVenue")) or (g.get("phaseType") or {}).get("code") == "FF",
                 "venue_code": (g.get("venue") or {}).get("code"),
             }
         )

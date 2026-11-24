@@ -1,8 +1,11 @@
 """Regenerate notebooks/weekly_picks.ipynb (keeps the notebook's cells in reviewable code)."""
 
+import argparse
 from pathlib import Path
 
 import nbformat as nbf
+
+argparse.ArgumentParser(description=__doc__).parse_args()
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,9 +15,11 @@ cells = [
         "Run this before each round's deadline (the first tip-off). A GitHub Action saves the app's\n"
         "line-ups at 14:41 UTC on game days; running after that uses the freshest injury news.\n\n"
         "1. Adjust the settings cell (budget, players you know are out, optional roster).\n"
-        "2. **Run all**. It refreshes the data, trains the models on all history (~1 min) and\n"
+        "2. **Run all**. It refreshes the data, trains the models on all history (1-2 min) and\n"
         "   picks the best 11 within your budget.\n"
-        "3. The result is saved as markdown under `recommendations/`."
+        "3. With `SAVE = True` the result is saved under `recommendations/` (used for tracking).\n\n"
+        "Line-ups are fetched live from the app on every run, so run it as late as possible\n"
+        "before the deadline (the first tip-off). It needs an internet connection."
     ),
     nbf.v4.new_code_cell(
         "import pandas as pd\n"
@@ -28,7 +33,8 @@ cells = [
         "MATCHDAY = None        # None = the next round; or a round number, e.g. 15\n"
         "BUDGET = 100.0         # your team value + bank if it has grown\n"
         "REFRESH = True         # fetch new box scores and the current player list first\n\n"
-        "# Injury news the app has not picked up yet: 'OUT', 'DOUBTFUL' or 'PROBABLE'\n"
+        "# Injury news the app has not picked up yet: 'OUT' (0%), 'DOUBTFUL' (30%),\n"
+        "# 'PROBABLE' (75%) or 'FIT' (use the model even if the app lists him as out)\n"
         "OVERRIDES = {\n"
         "    # 'Mike James': 'OUT',\n"
         "}\n"
@@ -37,7 +43,8 @@ cells = [
         "# Optional: your current 10 players + coach (names) to get the best trades instead\n"
         "ROSTER = None          # e.g. ['Sasha Vezenkov', ..., 'Georgios Bartzokas']\n"
         "BANK = 0.0             # unspent credits\n"
-        "MAX_TRADES = 4         # 4 per round; raise it during an unlimited window"
+        "MAX_TRADES = 4         # 4 per round; raise it during an unlimited window\n"
+        "SAVE = True           # save the result to recommendations/ (set False for test runs)"
     ),
     nbf.v4.new_code_cell(
         "rec = recommend(matchday=MATCHDAY, budget=BUDGET, overrides=OVERRIDES, locked=LOCKED,\n"
@@ -77,11 +84,14 @@ cells = [
         "    print('Out:', ', '.join(rec.trades['out']) or 'none')\n"
         "    print('In: ', ', '.join(rec.trades['in']) or 'none')\n"
         "    print(f\"Expected gain: {rec.trades['gain']:+.1f} pts\")\n"
+        "    display(Markdown('**Your squad after these trades**'))\n"
+        "    display(rec.my_squad_table())\n"
+        "    display(rec.coach_pick(rec.my_squad))\n"
         "else:\n"
         "    print('No roster given.')"
     ),
     nbf.v4.new_markdown_cell("## Save"),
-    nbf.v4.new_code_cell("path = rec.save()\nprint('saved to', path)"),
+    nbf.v4.new_code_cell("if SAVE:\n    print('saved to', rec.save())\nelse:\n    print('not saved (SAVE = False)')"),
 ]
 
 nb = nbf.v4.new_notebook(cells=cells, metadata={

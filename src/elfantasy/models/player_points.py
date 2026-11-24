@@ -39,6 +39,9 @@ PARAMS = dict(
     colsample_bytree=0.7,
     reg_lambda=5.0,
     n_estimators=400,
+    random_state=42,          # fixed seed: same data -> same model -> same picks
+    deterministic=True,
+    force_row_wise=True,
     verbose=-1,
 )
 

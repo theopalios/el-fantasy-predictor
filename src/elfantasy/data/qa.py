@@ -85,6 +85,8 @@ def check_vs_app(pg: pd.DataFrame, tg: pd.DataFrame) -> dict[str, float]:
 
 
 def main() -> None:
+    import argparse
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     pg, tg, games = _load("player_games"), _load("team_games"), _load("games")
     if pg is None:

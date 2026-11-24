@@ -27,6 +27,14 @@ class Store:
         people = rd("people")
         for df in (games, pg, tg):
             df["date_utc"] = pd.to_datetime(df["date_utc"], utc=True)
+        # The Final Four is played at a neutral venue even if the API does not flag it.
+        games["neutral_venue"] = games["neutral_venue"].astype(bool) | (games["phase"] == "FF")
+        # Deterministic row order: downloads finish in arbitrary order, and model training
+        # (bagging) depends on row order, so the same data must always give the same model.
+        games = games.sort_values(["season", "gamecode"]).reset_index(drop=True)
+        pg = pg.sort_values(["season", "gamecode", "team", "player_code"]).reset_index(drop=True)
+        tg = tg.sort_values(["season", "gamecode", "team"]).reset_index(drop=True)
+        people = people.sort_values(["season", "club", "person_code"]).reset_index(drop=True)
         return cls(games=games, player_games=pg, team_games=tg, people=people)
 
 

@@ -141,6 +141,9 @@ def rest_table(games: pd.DataFrame) -> pd.DataFrame:
     """Days since each team's previous EuroLeague game, from the full schedule (works for
     future games too)."""
     g = games.dropna(subset=["date_utc"])
+    # Drop past games that were never played (cancelled/voided): they are not real rest breaks.
+    last_played = g.loc[g["played"], "date_utc"].max()
+    g = g[g["played"] | (g["date_utc"] > last_played)]
     long = pd.concat([
         g[["season", "gamecode", "date_utc", "home_team"]].rename(columns={"home_team": "team"}),
         g[["season", "gamecode", "date_utc", "away_team"]].rename(columns={"away_team": "team"}),

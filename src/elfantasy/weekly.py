@@ -47,6 +47,8 @@ log = logging.getLogger("elfantasy.weekly")
 OVERRIDE_P = {"OUT": 0.0, "DOUBTFUL": 0.30, "PROBABLE": 0.75}
 RETURNING_P = 0.85   # app says he plays but he missed his team's last game (injury return / new signing)
 NO_HISTORY_P = 0.25  # no EuroLeague box score this season: usually a 12th-15th man who rarely plays
+OVERRIDE_VALUES = ("OUT", "DOUBTFUL", "PROBABLE", "FIT")
+TRADE_EPSILON = 1.0  # a trade must gain at least this many expected points (design §7)
 POS_SHORT = {"Guard": "G", "Forward": "F", "Center": "C"}
 POSITIONS = ("Guard", "Forward", "Center")
 
@@ -72,19 +74,24 @@ class Recommendation:
     explanations: dict = field(default_factory=dict)
     trades: dict | None = None
     notes: list[str] = field(default_factory=list)
+    my_squad: SquadResult | None = None   # roster mode: your squad after the suggested trades
 
     _COLS = ["name", "team", "opp", "pos", "price", "exp_pts", "pts_if_plays", "p_play", "real_lineup"]
 
-    def squad_table(self) -> pd.DataFrame:
-        sq = self.squad.players.copy()
+    def squad_table(self, squad: SquadResult | None = None) -> pd.DataFrame:
+        sq = (squad or self.squad).players.copy()
         order = {"starter": 0, "sixth": 1, "bench": 2}
         sq["order"] = sq["role"].map(order)
         sq = sq.sort_values(["order", "exp_pts"], ascending=[True, False])
         sq["role"] = np.where(sq["captain"], "starter (C)", sq["role"])
         return sq[["role"] + self._COLS].round(2).reset_index(drop=True)
 
-    def coach_pick(self) -> pd.Series:
-        return self.squad.coach[["name", "team", "opp", "price", "exp_pts", "p_win"]]
+    def coach_pick(self, squad: SquadResult | None = None) -> pd.Series:
+        return (squad or self.squad).coach[["name", "team", "opp", "price", "exp_pts", "p_win"]]
+
+    def my_squad_table(self) -> pd.DataFrame | None:
+        """Roster mode: your squad after the suggested trades (line-up and captain)."""
+        return self.squad_table(self.my_squad) if self.my_squad is not None else None
 
     def coach_table(self) -> pd.DataFrame:
         return (self.coaches.sort_values("exp_pts", ascending=False)
@@ -138,7 +145,12 @@ class Recommendation:
             lines += ["## Trades for your roster", "",
                       f"Out: {', '.join(self.trades['out']) or 'none'}  ",
                       f"In: {', '.join(self.trades['in']) or 'none'}  ",
-                      f"Expected gain: {self.trades['gain']:+.1f} pts", ""]
+                      f"Expected gain: {self.trades['gain']:+.1f} pts (a trade must gain ≥ {TRADE_EPSILON:.0f} pt)", ""]
+            if self.my_squad is not None:
+                mc = self.coach_pick(self.my_squad)
+                lines += ["### Your squad after these trades", "", md(self.my_squad_table()), "",
+                          f"Coach: {mc['name']} ({mc['team']}), expected {mc['exp_pts']:.1f}. "
+                          f"Squad expected {self.my_squad.objective:.1f} pts, cost {self.my_squad.cost:.1f}.", ""]
         lines += ["## Captain shortlist", "", md(self.captain_shortlist()), ""]
         for pos in ("G", "F", "C"):
             lines += [f"## Top {pos}", "", md(self.rankings(pos, n=8)), ""]
@@ -176,6 +188,7 @@ class Recommendation:
             "coach": {"player_id": int(c.name), "name": c["name"], "team": c["team"],
                       "price": float(c["price"]), "exp_pts": float(c["exp_pts"])},
             "notes": self.notes,
+            "trades": ({k: v for k, v in self.trades.items() if k != "squad"} if self.trades else None),
         }
 
     def save(self, folder: Path | None = None, suffix: str = "", banner: str | None = None) -> Path:
@@ -222,6 +235,26 @@ def _latest_positions(pg: pd.DataFrame) -> pd.Series:
     return p.groupby("player_code")["position_name"].last()
 
 
+def _moved_matches(app: FantasyAppAPI, cfg: dict, md: dict, matches: pd.DataFrame) -> set:
+    """Matches moved outside their round, per the official rule: played after the next round
+    has started or before the previous round has ended. Their players and coaches get their
+    season average (captain not doubled)."""
+    by_number = {m["number"]: m for m in cfg["matchdays"]}
+
+    def starts(n: int) -> pd.Series:
+        if n not in by_number:
+            return pd.Series(dtype="datetime64[ns, UTC]")
+        return parse_schedule(app.schedule_matchday(cfg["current_schedule_id"], by_number[n]["id"]))["started_at"]
+
+    nxt, prv = starts(md["number"] + 1), starts(md["number"] - 1)
+    moved = pd.Series(False, index=matches.index)
+    if len(nxt):
+        moved |= matches["started_at"] > nxt.min()
+    if len(prv):
+        moved |= matches["started_at"] < prv.max()
+    return set(matches.loc[moved, "match_id"])
+
+
 def _last_game_players(ctx: FeatureContext, season: int) -> pd.DataFrame:
     """Players who played each team's most recent played game this season."""
     pg = ctx.store.player_games
@@ -256,9 +289,14 @@ def recommend(
     if matchday is None:
         md, sched = find_upcoming_matchday(app, cfg)
     else:
-        md = next(m for m in cfg["matchdays"] if m["number"] == matchday)
+        md = next((m for m in cfg["matchdays"] if m["number"] == matchday), None)
+        if md is None:
+            nums = [m["number"] for m in cfg["matchdays"]]
+            raise ValueError(f"Round {matchday} does not exist; valid rounds are {min(nums)} to {max(nums)}")
         sched = app.schedule_matchday(cfg["current_schedule_id"], md["id"])
     matches = parse_schedule(sched)
+    moved_ids = _moved_matches(app, cfg, md, matches)
+    moved_teams = set(matches.loc[matches["match_id"].isin(moved_ids), ["home_abbr", "away_abbr"]].to_numpy().ravel())
     lineups = pd.concat([parse_lineups(app.match_lineups(int(m))) for m in matches["match_id"]], ignore_index=True)
     lineups = lineups.drop_duplicates("player_id").set_index("player_id")
     lineups["name"] = (lineups["first_name"].fillna("") + " " + lineups["last_name"].fillna("")).str.strip()
@@ -291,17 +329,26 @@ def recommend(
     players = pool[pool["position"] != "Head Coach"].copy()
     coaches = pool[pool["position"] == "Head Coach"].copy()
 
+    # ---- resolve every name first, so a typo fails before the slow part
+    everyone = pd.concat([players[["name"]], coaches[["name"]]])
+    override = {}
+    for k, v in (overrides or {}).items():
+        v = str(v).strip().upper()
+        if v not in OVERRIDE_VALUES:
+            raise ValueError(f"override for '{k}' must be one of {', '.join(OVERRIDE_VALUES)}, not '{v}'")
+        override[_resolve(players, k)] = v
+    excl = {_resolve(everyone, k) for k in excluded}
+    lock = {_resolve(everyone, k) for k in locked}
+    current = {_resolve(everyone, k) for k in roster} if roster else None
+
     # ---- availability inputs: overrides, app status, who played the last game
     last = _last_game_players(ctx, year)
     played_last = set(zip(last["team"], last["player_code"]))
     pgs = store.player_games
     played_this_season = set(pgs.loc[(pgs["season"] == year) & pgs["played"], "player_code"])
-    override = {}
-    for k, v in (overrides or {}).items():
-        override[_resolve(players, k)] = str(v).upper()
-    app_out = (players["p_play"].fillna(1.0) <= 0) | (players["lineup_status"] == "out")
-    forced_out = pd.Series({pid: OVERRIDE_P.get(v, 1.0) == 0.0 for pid, v in override.items()}, dtype=bool)
-    is_out = app_out | players.index.isin(forced_out[forced_out].index)
+    # out = your OUT override, or the app's out flag unless you overrode it
+    app_out = ((players["p_play"].fillna(1.0) <= 0) | (players["lineup_status"] == "out")) & ~players.index.isin(list(override))
+    is_out = app_out | players.index.isin([pid for pid, v in override.items() if v == "OUT"])
 
     # ---- features for matched players
     matched = players["player_code"].notna() & players["gamecode"].notna()
@@ -328,6 +375,15 @@ def recommend(
     for p in POSITIONS:
         X[f"vacated_min_{p}"] = [float(vac_pos.get((t, p), 0.0)) for t in X["team"]]
     X["vacated_min_pos"] = [float(vac_pos.get((t, p), 0.0)) for t, p in zip(X["team"], X["position_name"])]
+    # never count a player's own absence in his own row (see features/build.py)
+    if len(gone):
+        own = {(t, c): (m_, ps) for t, c, m_, ps in zip(gone["team"], gone["player_code"], gone["min_ewm_h5"], gone["position_name"])}
+        own_min = np.array([own.get((t, c), (0.0, None))[0] for t, c in zip(X["team"], X["player_code"])])
+        own_pos = [own.get((t, c), (0.0, None))[1] for t, c in zip(X["team"], X["player_code"])]
+        X["vacated_min"] = (X["vacated_min"] - own_min).clip(lower=0.0)
+        for p in POSITIONS:
+            X[f"vacated_min_{p}"] = (X[f"vacated_min_{p}"] - np.where(np.array(own_pos) == p, own_min, 0.0)).clip(lower=0.0)
+        X["vacated_min_pos"] = (X["vacated_min_pos"] - np.where(np.array(own_pos) == X["position_name"].to_numpy(), own_min, 0.0)).clip(lower=0.0)
 
     # ---- models trained on all history
     train = ctx.training_rows()
@@ -363,6 +419,17 @@ def recommend(
     players["p_play_app"] = players["p_play"]
     players["p_play"] = [p_final(pid, r) for pid, r in players.iterrows()]
     players["exp_pts"] = players["p_play"] * players["pts_if_plays"]
+    players["captain_ok"] = True
+    if moved_teams:
+        # game moved out of the round: everyone on these teams scores his season average
+        # (injured players too) and the captain is not doubled
+        season_avg = pd.Series(X["fp_season_mean"].to_numpy(), index=X["player_id"])
+        on_moved = players["team_abbr"].isin(moved_teams)
+        players.loc[on_moved, "exp_pts"] = players.index[on_moved].map(season_avg).fillna(0.0)
+        players.loc[on_moved, "p_play"] = 1.0
+        players.loc[on_moved, "captain_ok"] = False
+        notes.append(f"Game(s) moved out of this round for {', '.join(sorted(moved_teams))}: their players and "
+                     f"coaches score their season average and cannot be doubled as captain")
     players["real_lineup"] = players["lineup_status"]   # app projection: starter / bench / out
     players["team"] = players["team_abbr"]
     unmatched = int((~matched).sum())
@@ -383,27 +450,31 @@ def recommend(
     gfe["p_win"] = gm.p_win(gfe)
     coaches = coaches.merge(gfe[["team", "coach_exp", "p_win"]], on="team", how="left").set_axis(coaches.index)
     coaches["exp_pts"] = coaches["coach_exp"]
+    if moved_teams:
+        tgs = store.team_games
+        coach_avg = tgs[tgs["season"] == year].groupby("team")["coach_pts"].mean()
+        on_moved = coaches["team_abbr"].isin(moved_teams)
+        coaches.loc[on_moved, "exp_pts"] = coaches.loc[on_moved, "team"].map(coach_avg).fillna(0.0).to_numpy()
     coaches["home"] = coaches["is_home"]
     coaches["team"] = coaches["team_abbr"]
 
     # ---- optimize
-    excl = {_resolve(players, k) for k in excluded}
-    lock = {_resolve(players, k) for k in locked}
     squad = best_squad(players.assign(exp=players["exp_pts"]), coaches.assign(exp=coaches["exp_pts"]),
                        budget=budget, locked=lock, excluded=excl)
     if squad.status != "Optimal":
         raise RuntimeError(f"optimizer status {squad.status}: check budget/locks")
 
-    trades = None
-    if roster:
-        everyone = pd.concat([players[["name"]], coaches[["name"]]])
-        current = {_resolve(everyone, k) for k in roster}
+    trades, mine = None, None
+    if current:
         cur_value = float(players.loc[players.index.intersection(list(current)), "price"].sum()
                           + coaches.loc[coaches.index.intersection(list(current)), "price"].sum())
         mine = best_squad(players.assign(exp=players["exp_pts"]), coaches.assign(exp=coaches["exp_pts"]),
-                          budget=bank + cur_value, locked=lock, excluded=excl, current=current, max_new=max_trades)
+                          budget=bank + cur_value + 1e-6, locked=lock, excluded=excl, current=current,
+                          max_new=max_trades, trade_penalty=TRADE_EPSILON)
         keep = best_squad(players.assign(exp=players["exp_pts"]), coaches.assign(exp=coaches["exp_pts"]),
                           budget=bank + cur_value + 1e-6, current=current, max_new=0)
+        if mine.status != "Optimal":
+            raise RuntimeError(f"roster mode: optimizer status {mine.status} (is the roster complete and valid?)")
         new_ids = set(mine.players.index) | {mine.coach.name}
         trades = {
             "out": [everyone.loc[i, "name"] for i in current - new_ids],
@@ -414,7 +485,8 @@ def recommend(
 
     # ---- explanations for the squad (LightGBM feature contributions)
     explanations = {}
-    sel = X[X["player_id"].isin(squad.players.index)]
+    picked = set(squad.players.index) | (set(mine.players.index) if mine is not None else set())
+    sel = X[X["player_id"].isin(picked)]
     if len(sel):
         contrib = pm.model.predict(_matrix(sel), pred_contrib=True)
         names = list(_matrix(sel).columns)
@@ -428,7 +500,8 @@ def recommend(
     if deadline is not None and deadline < now:
         notes.append("The deadline has passed: this round has already started")
     return Recommendation(matchday=md["number"], deadline=deadline, budget=budget, players=players,
-                          coaches=coaches, squad=squad, explanations=explanations, trades=trades, notes=notes)
+                          coaches=coaches, squad=squad, explanations=explanations, trades=trades, notes=notes,
+                          my_squad=mine)
 
 
 def main() -> None:
@@ -436,16 +509,21 @@ def main() -> None:
     ap.add_argument("--matchday", type=int, default=None)
     ap.add_argument("--budget", type=float, default=None)
     ap.add_argument("--out", action="append", default=[], help="player you know is out (repeatable)")
-    ap.add_argument("--doubtful", action="append", default=[])
+    ap.add_argument("--doubtful", action="append", default=[], help="30%% chance to play (repeatable)")
+    ap.add_argument("--probable", action="append", default=[], help="75%% chance to play (repeatable)")
     ap.add_argument("--exclude", action="append", default=[])
     ap.add_argument("--lock", action="append", default=[])
     ap.add_argument("--refresh", action="store_true", help="fetch new box scores and player list first")
     ap.add_argument("--save", action="store_true", help="write the markdown to recommendations/")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    overrides = {n: "OUT" for n in args.out} | {n: "DOUBTFUL" for n in args.doubtful}
-    rec = recommend(matchday=args.matchday, budget=args.budget, overrides=overrides,
-                    excluded=args.exclude, locked=args.lock, refresh=args.refresh)
+    overrides = ({n: "OUT" for n in args.out} | {n: "DOUBTFUL" for n in args.doubtful}
+                 | {n: "PROBABLE" for n in args.probable})
+    try:
+        rec = recommend(matchday=args.matchday, budget=args.budget, overrides=overrides,
+                        excluded=args.exclude, locked=args.lock, refresh=args.refresh)
+    except (ValueError, KeyError) as exc:
+        raise SystemExit(f"error: {exc}")
     print(rec.to_markdown())
     if args.save:
         print(f"\nsaved to {rec.save()}")

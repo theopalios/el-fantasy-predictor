@@ -33,7 +33,8 @@ class PriceModel:
     def fit(self, rows: pd.DataFrame, coach_rows: pd.DataFrame) -> "PriceModel":
         r = rows.dropna(subset=["price"])
         self.model = lgb.LGBMRegressor(objective="regression", n_estimators=300, learning_rate=0.05,
-                                       num_leaves=15, min_child_samples=30, verbose=-1)
+                                       num_leaves=15, min_child_samples=30, random_state=42,
+                                       deterministic=True, force_row_wise=True, verbose=-1)
         self.model.fit(_m(r), r["price"])
         self.floor = float(r["price"].min())
         c = coach_rows.dropna(subset=["price", "elo"])

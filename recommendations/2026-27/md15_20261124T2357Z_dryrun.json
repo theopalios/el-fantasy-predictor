@@ -1,11 +1,11 @@
 {
  "season": 2026,
  "matchday": 15,
- "generated_utc": "2026-11-24T18:13:54.276738+00:00",
+ "generated_utc": "2026-11-24T23:57:36.789403+00:00",
  "deadline_utc": "2026-12-03T17:30:00+00:00",
  "budget": 100.0,
- "cost": 99.8,
- "expected_total": 160.11577750674016,
+ "cost": 100.0,
+ "expected_total": 148.2346438513866,
  "squad": [
   {
    "player_id": 3933,
@@ -15,8 +15,8 @@
    "price": 4.4,
    "role": "bench",
    "captain": false,
-   "exp_pts": 4.615388890900299,
-   "p_play": 0.8948819722684325
+   "exp_pts": 4.5147759683556865,
+   "p_play": 0.8860887794659321
   },
   {
    "player_id": 7238,
@@ -26,19 +26,19 @@
    "price": 6.2,
    "role": "bench",
    "captain": false,
-   "exp_pts": 9.67954536396989,
-   "p_play": 0.9999889135925087
+   "exp_pts": 9.259533561340668,
+   "p_play": 0.9128024316031383
   },
   {
-   "player_id": 8644,
-   "name": "Stefan Joksimovic",
-   "team": "KBA",
+   "player_id": 3936,
+   "name": "Nikos Rogkavopoulos",
+   "team": "PAO",
    "pos": "F",
-   "price": 4.0,
+   "price": 4.2,
    "role": "bench",
    "captain": false,
-   "exp_pts": 4.815280633694575,
-   "p_play": 0.9999590224404165
+   "exp_pts": 4.208687443239666,
+   "p_play": 0.85
   },
   {
    "player_id": 3971,
@@ -48,8 +48,8 @@
    "price": 4.4,
    "role": "bench",
    "captain": false,
-   "exp_pts": 5.952348805290024,
-   "p_play": 0.9999890078076272
+   "exp_pts": 5.127183801161687,
+   "p_play": 0.8993855645635761
   },
   {
    "player_id": 7424,
@@ -59,8 +59,8 @@
    "price": 11.4,
    "role": "sixth",
    "captain": false,
-   "exp_pts": 15.7299753539266,
-   "p_play": 0.9999841599785949
+   "exp_pts": 13.995042643925467,
+   "p_play": 0.9129085761036472
   },
   {
    "player_id": 4094,
@@ -70,8 +70,8 @@
    "price": 6.2,
    "role": "starter",
    "captain": false,
-   "exp_pts": 15.209807357079736,
-   "p_play": 0.9999814204212714
+   "exp_pts": 13.812147303206448,
+   "p_play": 0.9321104823230594
   },
   {
    "player_id": 3766,
@@ -81,8 +81,8 @@
    "price": 20.0,
    "role": "starter",
    "captain": true,
-   "exp_pts": 25.559475553007786,
-   "p_play": 0.9999936055357278
+   "exp_pts": 23.478640750878714,
+   "p_play": 0.9241639227782071
   },
   {
    "player_id": 3850,
@@ -92,8 +92,8 @@
    "price": 13.8,
    "role": "starter",
    "captain": false,
-   "exp_pts": 19.06608966716399,
-   "p_play": 0.9991777209598562
+   "exp_pts": 17.327867572212945,
+   "p_play": 0.8961469319055804
   },
   {
    "player_id": 3851,
@@ -103,8 +103,8 @@
    "price": 9.6,
    "role": "starter",
    "captain": false,
-   "exp_pts": 14.992875769644455,
-   "p_play": 0.9992878000402141
+   "exp_pts": 13.600661099939385,
+   "p_play": 0.9438944934827439
   },
   {
    "player_id": 4360,
@@ -114,8 +114,8 @@
    "price": 9.6,
    "role": "starter",
    "captain": false,
-   "exp_pts": 13.992491040534627,
-   "p_play": 0.9999912851437199
+   "exp_pts": 13.438142153094981,
+   "p_play": 0.9284068605580006
   }
  ],
  "coach": {
@@ -123,11 +123,12 @@
   "name": "Georgios Bartzokas",
   "team": "OLY",
   "price": 10.2,
-  "exp_pts": 17.474305365446337
+  "exp_pts": 17.548411190201104
  },
  "notes": [
   "48 players have not played a EuroLeague game this season (12 of them not mapped to EuroLeague ids): debut average 5.1 pts \u00d7 P(plays) 0.25 unless you override",
-  "Box scores through 2026-11-20; app line-ups fetched 2026-11-24 18:13 UTC"
+  "Box scores through 2026-11-20; app line-ups fetched 2026-11-24 23:57 UTC"
  ],
- "dry_run": "Dry run made on 24 Nov while Round 14 was still being played: box scores through Round 13 and the app's line-ups as of 24 Nov. Re-run on Thu 3 Dec after the 14:41 UTC snapshot for the real Round 15 picks."
+ "trades": null,
+ "dry_run": "Dry run made on 24 Nov while Round 14 was still being played: box scores through Round 13 and the app's line-ups as of 24 Nov. Re-run on Thu 3 Dec, as late as possible before the 17:30 UTC tip-off, for the real Round 15 picks."
 }

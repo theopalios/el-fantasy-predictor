@@ -30,6 +30,7 @@ from elfantasy.data.http import HttpClient
 from elfantasy.paths import PROCESSED_DIR, RAW_CACHE_DIR
 from elfantasy.rules import default_rules
 from elfantasy.scoring import coach_points_series, pir_from_stats, player_fantasy_points
+import numpy as np
 
 log = logging.getLogger("elfantasy.build")
 
@@ -72,6 +73,10 @@ def build_euroleague(
     for year in range(first, last + 1):
         is_current = year == cur
         games = parse_games(api.games(year, cache=not is_current), year)
+        if games.empty:
+            # e.g. from 1 July until the new season's calendar is published
+            log.warning("season %s-%s has no games yet: skipped", year, str(year + 1)[-2:])
+            continue
         games_l.append(games)
         played = games[games["played"]]
         log.info("season %s-%s: %d games (%d played)", year, str(year + 1)[-2:], len(games), len(played))
@@ -125,6 +130,20 @@ def build_euroleague(
     player_games = pd.concat(players_l, ignore_index=True)
     team_games = pd.concat(teams_l, ignore_index=True)
     people = pd.concat(people_l, ignore_index=True) if people_l else pd.DataFrame()
+
+    # A game whose download failed this time keeps its previously downloaded rows, so a
+    # temporary API problem never silently removes games from the tables.
+    failed_games = {(y, g) for y, g, _ in failures if isinstance(g, (int, np.integer))}
+    if failed_games and (PROCESSED_DIR / "player_games.parquet").exists():
+        keys = ["season", "gamecode"]
+        failed_df = pd.DataFrame(sorted(failed_games), columns=keys)
+        old_pg = pd.read_parquet(PROCESSED_DIR / "player_games.parquet").merge(failed_df, on=keys)
+        old_tg = pd.read_parquet(PROCESSED_DIR / "team_games.parquet").merge(failed_df, on=keys)
+        base_cols = [c for c in player_games.columns if c in old_pg.columns]
+        player_games = pd.concat([player_games, old_pg[base_cols]], ignore_index=True)
+        team_games = pd.concat([team_games, old_tg[[c for c in team_games.columns if c in old_tg.columns]]], ignore_index=True)
+        log.warning("%d games failed to download; kept %d previously downloaded player rows for them",
+                    len(failed_games), len(old_pg))
 
     player_games, team_games = add_game_context(player_games, team_games, games)
     add_fantasy_scores(player_games, team_games)

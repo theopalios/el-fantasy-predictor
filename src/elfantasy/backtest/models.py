@@ -188,11 +188,18 @@ def write_report(res: dict, path: Path) -> str:
     m = res["metrics"].copy()
     m["split"] = np.where(m["season"] == TUNING_SEASON, "tuning", "held-out")
     held = m[m["split"] == "held-out"]
-    overall = held.groupby("method").apply(lambda g: pd.Series({
-        "n": g["n"].sum(),
-        "MAE": np.average(g["MAE"], weights=g["n"]),
-        "RMSE": np.sqrt(np.average(g["RMSE"] ** 2, weights=g["n"])),
-        "spearman": np.average(g["spearman_per_round"], weights=g["n"])}), include_groups=False)
+    seasons_held = held["season"].nunique()
+    full = held.groupby("method")["season"].transform("nunique") == seasons_held   # same rows only
+
+    def pool(g: pd.DataFrame) -> pd.Series:
+        return pd.Series({
+            "n": g["n"].sum(),
+            "MAE": np.average(g["MAE"], weights=g["n"]),
+            "RMSE": np.sqrt(np.average(g["RMSE"] ** 2, weights=g["n"])),
+            "spearman": np.average(g["spearman_per_round"], weights=g["n"])})
+
+    overall = held[full].groupby("method").apply(pool, include_groups=False)
+    cur = m[m["season"] == PRICE_SEASON].set_index("method")[["n", "MAE", "RMSE", "spearman_per_round"]]
 
     sim = res["sim"]
     tot = sim.groupby(["season", "pool", "method"])["points"].agg(["mean", "count"]).reset_index()
@@ -216,9 +223,13 @@ def write_report(res: dict, path: Path) -> str:
         "",
         "## Player points (players who played)",
         "",
-        "Held-out seasons (2024-25, 2025-26, 2026-27 R2-R13):",
+        "Held-out seasons (2024-25, 2025-26, 2026-27 R2-R13), methods available in all of them:",
         "",
         _md(overall),
+        "",
+        "2026-27 only (same rows for every method, including the price blend):",
+        "",
+        _md(cur),
         "",
         "Per season:",
         "",
@@ -227,6 +238,10 @@ def write_report(res: dict, path: Path) -> str:
         "`model_price` (2026-27 only) blends the model with the app's price, refitted each round.",
         "",
         "## Availability: P(plays | played the team's previous game)",
+        "",
+        "Features use only information known before the deadline. `vacated_min` counts missing",
+        "teammates and never the player himself. An earlier version counted him, which leaked",
+        "the label; that was found in review on 24 Nov and fixed.",
         "",
         _md(res["availability"].set_index("season")),
         "",

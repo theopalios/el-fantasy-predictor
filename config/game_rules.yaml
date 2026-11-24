@@ -103,5 +103,7 @@ prices:
   objective_weight: 0.0             # the user chose "points only": price changes are ignored
 
 special_cases:
+  # Applied in elfantasy.weekly: a match played after the next round has started (or before the
+  # previous one ended) -> its players and coaches score their season average; captain not doubled.
   postponed_game_outside_round: average_score   # players and coach get their season average
   postseason_team_not_playing_in_round: 0       # players of teams with no game that round score 0

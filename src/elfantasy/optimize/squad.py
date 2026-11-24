@@ -35,9 +35,14 @@ def best_squad(
     excluded: set | None = None,
     current: set | None = None,
     max_new: int | None = None,
+    trade_penalty: float = 0.0,
 ) -> SquadResult:
     """`current` + `max_new`: start from an existing roster (player and coach indices) and
-    allow at most `max_new` incoming players/coach (the trade limit; coach counts)."""
+    allow at most `max_new` incoming players/coach (the trade limit; coach counts).
+    `trade_penalty`: points a trade must gain to be worth making (design §7, epsilon).
+    `locked` / `excluded` may contain player or coach indices.
+    Optional column `captain_ok` (bool) on players: False = may not be captain (e.g. a game
+    moved out of its round scores the season average and the captain is not doubled)."""
     rules = rules or default_rules()
     budget = rules.initial_budget if budget is None else budget
     mult = rules.multipliers
@@ -47,6 +52,7 @@ def best_squad(
     P = players.dropna(subset=["price", value_col, "pos", "team"])
     P = P[~P.index.isin(excluded)]
     C = coaches.dropna(subset=["price", value_col, "team"])
+    C = C[~C.index.isin(excluded)]
 
     prob = pulp.LpProblem("squad", pulp.LpMaximize)
     s = {i: pulp.LpVariable(f"s_{n}", cat="Binary") for n, i in enumerate(P.index)}
@@ -90,11 +96,19 @@ def best_squad(
 
     for i in locked & set(P.index):
         prob += x[i] == 1
+    for k in locked & set(C.index):
+        prob += h[k] == 1
+    if "captain_ok" in P.columns:
+        for i in P.index[~P["captain_ok"].fillna(True).astype(bool)]:
+            prob += c[i] == 0
 
-    if current is not None and max_new is not None:
+    if current is not None:
         incoming = pulp.lpSum(x[i] for i in P.index if i not in current) + \
             pulp.lpSum(h[k] for k in C.index if k not in current)
-        prob += incoming <= max_new
+        if max_new is not None:
+            prob += incoming <= max_new
+        if trade_penalty:
+            prob.setObjective(prob.objective - trade_penalty * incoming)
 
     available = pulp.listSolvers(onlyAvailable=True)
     solver = pulp.HiGHS(msg=False) if "HiGHS" in available else pulp.PULP_CBC_CMD(msg=False)
@@ -110,7 +124,11 @@ def best_squad(
     k = next(k for k in C.index if h[k].value() > 0.5)
     coach = C.loc[k]
     cost = float(out["price"].sum() + coach["price"])
-    return SquadResult(status, out.sort_values(["role", "pos"]), coach, float(pulp.value(prob.objective)), cost)
+    # report pure expected points (without any trade penalty)
+    w = out["role"].map({"starter": mult["starter"], "sixth": mult["sixth_man"], "bench": mult["bench"]})
+    w = w * out["captain"].map({True: rules.captain_multiplier, False: 1.0})
+    expected = float((w * out[value_col]).sum() + mult["head_coach"] * coach[value_col])
+    return SquadResult(status, out.sort_values(["role", "pos"]), coach, expected, cost)
 
 
 def squad_points(result: SquadResult, player_pts: pd.Series, coach_pts: float, rules: Rules | None = None) -> float:

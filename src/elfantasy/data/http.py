@@ -16,6 +16,8 @@ import requests
 log = logging.getLogger(__name__)
 
 RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_RATE_LIMIT_RETRIES = 12   # the EuroLeague API blocks for ~5 min after a burst; be patient
+MIN_RATE_LIMIT_WAIT = 30.0    # a "Retry-After: 0" must not turn into instant retries
 
 
 class HttpClient:
@@ -73,23 +75,33 @@ class HttpClient:
             return json.loads(path.read_text(encoding="utf-8"))
 
         delay = 2.0
-        for attempt in range(self.max_retries + 1):
+        attempt = 0
+        rate_limited = 0
+        while True:
+            attempt += 1
             self._throttle()
             try:
                 resp = self.session.get(url, params=params, timeout=self.timeout, headers=headers)
             except (requests.ConnectionError, requests.Timeout) as exc:
-                if attempt == self.max_retries:
+                if attempt > self.max_retries:
                     raise
                 log.warning("network error %s on %s, retrying in %.0fs", exc, url, delay)
                 time.sleep(delay)
                 delay *= 2
                 continue
 
-            if resp.status_code in RETRY_STATUSES and attempt < self.max_retries:
+            if resp.status_code == 429 and rate_limited < MAX_RATE_LIMIT_RETRIES:
+                rate_limited += 1
                 retry_after = resp.headers.get("Retry-After")
-                sleep_for = float(retry_after) if retry_after and retry_after.isdigit() else delay
-                log.warning("HTTP %s on %s, retrying in %.0fs", resp.status_code, url, sleep_for)
+                wait = float(retry_after) if retry_after and retry_after.isdigit() else 0.0
+                sleep_for = max(wait, MIN_RATE_LIMIT_WAIT)
+                log.warning("HTTP 429 (rate limit) on %s, waiting %.0fs (attempt %d/%d)",
+                            url, sleep_for, rate_limited, MAX_RATE_LIMIT_RETRIES)
                 time.sleep(sleep_for)
+                continue
+            if resp.status_code in RETRY_STATUSES and resp.status_code != 429 and attempt <= self.max_retries:
+                log.warning("HTTP %s on %s, retrying in %.0fs", resp.status_code, url, delay)
+                time.sleep(delay)
                 delay *= 2
                 continue
 
@@ -99,5 +111,3 @@ class HttpClient:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(json.dumps(data), encoding="utf-8")
             return data
-
-        raise RuntimeError(f"unreachable: retries exhausted for {url}")

@@ -47,7 +47,9 @@ def game_features(ctx: FeatureContext, base: pd.DataFrame, vacated: pd.DataFrame
     g = g.merge(vac.rename(columns={"team": "opponent", "vacated_min": "opp_vacated_min"}),
                 on=["season", "gamecode", "opponent"], how="left")
     g["vac_diff"] = g["vacated_min"].fillna(0.0) - g["opp_vacated_min"].fillna(0.0)
-    g["is_home"] = g["is_home"].astype(float)
+    neutral = g[["season", "gamecode"]].merge(ctx.store.games[["season", "gamecode", "neutral_venue"]],
+                                              on=["season", "gamecode"], how="left")["neutral_venue"]
+    g["is_home"] = np.where(neutral.fillna(False).astype(bool).to_numpy(), 0.5, g["is_home"].astype(float))
     g["elo_diff"] = g["elo_diff"].fillna(0.0)
     return g
 

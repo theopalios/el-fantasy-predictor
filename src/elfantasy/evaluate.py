@@ -53,7 +53,10 @@ def _round_complete(games: pd.DataFrame, season: int, rnd: int) -> bool:
 
 
 def actual_points(season: int, rnd: int) -> tuple[dict, dict]:
-    """(app player_id -> fantasy pts, app team abbr -> coach pts) for a played round."""
+    """(app player_id -> fantasy pts, app team abbr -> coach pts) for a played round.
+
+    Uses the app's own fantasy points (match log) when available; box scores otherwise
+    (they differ from the app in ~1.3% of player-rounds, mostly personal fouls)."""
     pg = pd.read_parquet(PROCESSED_DIR / "player_games.parquet")
     tg = pd.read_parquet(PROCESSED_DIR / "team_games.parquet")
     mp = pd.read_parquet(PROCESSED_DIR / "map_player.parquet")
@@ -62,6 +65,11 @@ def actual_points(season: int, rnd: int) -> tuple[dict, dict]:
     pts = r.groupby("player_code")["fantasy_pts"].sum()
     by_id = {int(pid): float(pts[code]) for pid, code in zip(mp["player_id"], mp["person_code"])
              if isinstance(code, str) and code in pts.index}
+    ml_path = PROCESSED_DIR / "fantasy_match_log.parquet"
+    if ml_path.exists() and season == current_season_year():
+        ml = pd.read_parquet(ml_path)
+        app_pts = ml[(ml["matchday"] == rnd) & (ml["minutes"] > 0)].dropna(subset=["fantasy_pts"])
+        by_id.update({int(p): float(v) for p, v in zip(app_pts["player_id"], app_pts["fantasy_pts"])})
     c = tg[(tg["season"] == season) & (tg["round"] == rnd)].set_index("team")["coach_pts"]
     abbr_to_code = dict(zip(mt["app_abbr"], mt["el_code"]))
     coach = {abbr: float(c[code]) for abbr, code in abbr_to_code.items() if code in c.index}
@@ -91,6 +99,9 @@ def hindsight_best(season: int, rnd: int, player_pts: dict, coach_pts: dict, bud
 def evaluate_all(folder: Path | None = None) -> pd.DataFrame:
     year = current_season_year()
     folder = folder or REPO_ROOT / "recommendations" / f"{year}-{str(year + 1)[-2:]}"
+    if not folder.exists():
+        log.info("no recommendations saved yet in %s", folder)
+        return pd.DataFrame()
     games = pd.read_parquet(PROCESSED_DIR / "games.parquet")
     rows, details = [], []
     for path in sorted(folder.glob("md*.json")):

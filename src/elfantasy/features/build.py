@@ -49,7 +49,8 @@ class FeatureContext:
     lg_dvp: pd.DataFrame
     elo: pd.DataFrame
     rest: pd.DataFrame
-    vacated: pd.DataFrame
+    vacated: pd.DataFrame          # team totals per game
+    vacated_detail: pd.DataFrame   # the individual missing players (to remove a player's own minutes)
 
     @classmethod
     def from_store(cls, store: Store) -> "FeatureContext":
@@ -57,6 +58,7 @@ class FeatureContext:
         pstate = player_state(pg)
         tgi = team_game_index(games)
         metrics = team_game_metrics(tg, pg)
+        vac, vac_detail = vacated_minutes(pg, tgi, pstate)
         return cls(
             store=store,
             pstate=pstate,
@@ -66,7 +68,8 @@ class FeatureContext:
             lg_dvp=league_dvp_state(metrics),
             elo=elo_table(games),
             rest=rest_table(games),
-            vacated=vacated_minutes(pg, tgi, pstate),
+            vacated=vac,
+            vacated_detail=vac_detail,
         )
 
     # ------------------------------------------------------------------ public
@@ -103,6 +106,16 @@ class FeatureContext:
             if col not in X:
                 X[col] = 0.0
             X[col] = X[col].fillna(0.0)
+        # remove the player's OWN minutes: the feature means "missing teammates", and a player
+        # who sits out must not see his own absence (that leaks the availability label)
+        own = self.vacated_detail.rename(columns={"position_name": "own_pos", "min_ewm_h5": "own_min"})
+        X = self._merge(X, own, key + ["player_code"])
+        own_min = X["own_min"].fillna(0.0)
+        X["vacated_min"] = (X["vacated_min"] - own_min).clip(lower=0.0)
+        for p in POSITIONS:
+            col = f"vacated_min_{p}"
+            X[col] = (X[col] - np.where(X["own_pos"] == p, own_min, 0.0)).clip(lower=0.0)
+        X = X.drop(columns=["own_pos", "own_min"])
         X["vacated_min_pos"] = np.select([pos == p for p in POSITIONS],
                                          [X[f"vacated_min_{p}"] for p in POSITIONS], 0.0)
         opp_vac = self.vacated[["season", "gamecode", "team", "vacated_min"]].rename(
@@ -111,7 +124,9 @@ class FeatureContext:
         X["opp_vacated_min"] = X["opp_vacated_min"].fillna(0.0)
 
         X = X.copy()  # de-fragment after many column inserts
-        X["is_home"] = X["is_home"].astype(float)
+        neutral = self._merge(X[["season", "gamecode"]], self.store.games[["season", "gamecode", "neutral_venue"]],
+                              ["season", "gamecode"])["neutral_venue"].fillna(False).astype(bool)
+        X["is_home"] = np.where(neutral, 0.5, X["is_home"].astype(float))   # Final Four: no home team
         X["is_playoffs"] = X["phase"].isin(["PI", "PO", "FF"]).astype(float)
         return X
 

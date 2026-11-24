@@ -12,10 +12,12 @@ import pandas as pd
 
 AVAIL_FEATURES = ["dnp_rate_season", "min_ewm_h5", "min_l3", "min_trend", "start_rate_l5",
                   "career_games", "gp_season", "player_rest_days", "fp_ewm_h5", "rest_days",
-                  "is_playoffs", "prev_gp", "team_games_season", "vacated_min"]
+                  "is_playoffs", "prev_gp", "team_games_season",
+                  "vacated_min"]   # minutes of missing TEAMMATES (the player's own minutes are excluded)
 
 PARAMS = dict(objective="binary", learning_rate=0.05, num_leaves=15, min_child_samples=200,
-              n_estimators=300, subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1)
+              n_estimators=300, subsample=0.8, subsample_freq=1, colsample_bytree=0.8,
+              random_state=42, deterministic=True, force_row_wise=True, verbose=-1)
 
 
 @dataclass

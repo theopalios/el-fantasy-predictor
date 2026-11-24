@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -29,17 +30,23 @@ log = logging.getLogger("elfantasy.snapshot")
 
 
 def find_upcoming_matchday(app: FantasyAppAPI, cfg: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """First matchday (from the current one on) that still has unplayed matches."""
+    """The next round whose deadline has not passed: the first matchday (from the current one
+    on) in which no match has started yet. A round with one game postponed by weeks is
+    therefore skipped once its other games have started."""
     schedule_id = cfg["current_schedule_id"]
     current = cfg["current_matchday"]["number"]
+    now = datetime.now(timezone.utc)
     for md in sorted(cfg["matchdays"], key=lambda m: m["number"]):
         if md["number"] < current:
             continue
         raw = app.schedule_matchday(schedule_id, md["id"])
-        statuses = {m["status"] for r in raw.get("rounds", []) for m in r.get("matches", [])}
-        if statuses - {"played"}:
+        matches = parse_schedule(raw)
+        if matches.empty:
+            continue
+        started = (matches["status"] != "scheduled") | (matches["started_at"] <= now)
+        if not started.any():
             return md, raw
-    raise RuntimeError("no upcoming matchday found")
+    raise RuntimeError("no upcoming matchday found (season over?)")
 
 
 def take_snapshot(with_profiles: bool = True, matchday: int | None = None) -> Path:
@@ -48,7 +55,9 @@ def take_snapshot(with_profiles: bool = True, matchday: int | None = None) -> Pa
     if matchday is None:
         md, sched = find_upcoming_matchday(app, cfg)
     else:
-        md = next(m for m in cfg["matchdays"] if m["number"] == matchday)
+        md = next((m for m in cfg["matchdays"] if m["number"] == matchday), None)
+        if md is None:
+            raise SystemExit(f"error: round {matchday} does not exist")
         sched = app.schedule_matchday(cfg["current_schedule_id"], md["id"])
 
     matches = parse_schedule(sched)
@@ -66,15 +75,26 @@ def take_snapshot(with_profiles: bool = True, matchday: int | None = None) -> Pa
     }
 
     player_ids: set[int] = set()
+    errors: list[str] = []
     for mid in matches["match_id"]:
-        lu = app.match_lineups(int(mid))
+        try:
+            lu = app.match_lineups(int(mid))
+        except Exception as exc:          # keep what we can: one failure must not lose the snapshot
+            errors.append(f"lineups {mid}: {exc}")
+            continue
         out["lineups"][str(mid)] = lu
         for side in ("home_team", "away_team"):
             player_ids.update(p["id"] for p in (lu.get(side) or {}).get("lineups") or [])
 
     if with_profiles:
         for pid in sorted(player_ids):
-            out["profiles"][str(pid)] = app.player_profile(pid)
+            try:
+                out["profiles"][str(pid)] = app.player_profile(pid)
+            except Exception as exc:
+                errors.append(f"profile {pid}: {exc}")
+    if not out["lineups"]:
+        raise RuntimeError(f"no line-ups could be fetched: {errors[:3]}")
+    out["errors"] = errors
 
     if not app.has_token:
         log.info("no %s set: skipping in-app odds and injuries", "ELF_FANTASY_TOKEN")
@@ -93,6 +113,19 @@ def take_snapshot(with_profiles: bool = True, matchday: int | None = None) -> Pa
     year = current_season_year()
     folder = SNAPSHOT_DIR / f"{year}-{str(year + 1)[-2:]}" / f"md{md['number']:02d}"
     folder.mkdir(parents=True, exist_ok=True)
+    # Skip if nothing changed since the last snapshot of this round (keeps the repo small
+    # when the job runs several times a day).
+    content = {k: out[k] for k in ("lineups", "profiles", "odds", "injuries") if k in out}
+    out["content_sha1"] = hashlib.sha1(json.dumps(content, sort_keys=True).encode()).hexdigest()
+    previous = sorted(folder.glob("*.json.gz"))
+    if previous:
+        try:
+            with gzip.open(previous[-1], "rt", encoding="utf-8") as fh:
+                if json.load(fh).get("content_sha1") == out["content_sha1"]:
+                    log.info("matchday %s unchanged since %s: nothing saved", md["number"], previous[-1].name)
+                    return previous[-1]
+        except Exception:
+            pass
     path = folder / f"{now.strftime('%Y%m%dT%H%M%SZ')}.json.gz"
     with gzip.open(path, "wt", encoding="utf-8") as fh:
         json.dump(out, fh)

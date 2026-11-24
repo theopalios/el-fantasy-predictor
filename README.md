@@ -62,7 +62,7 @@ python -m elfantasy.data.fantasy_build    # current-season fantasy tables: price
 ```
 
 ```bash
-python -m elfantasy.data.snapshot         # run BEFORE EACH ROUND'S DEADLINE; commit the file it writes to snapshots/
+python -m elfantasy.data.snapshot         # done automatically by GitHub Actions twice a day; by hand only if it failed
 ```
 
 The app's pre-deadline state (probability of playing, projected lineups, ownership, injured

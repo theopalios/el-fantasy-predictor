@@ -7,14 +7,22 @@ are held out.
 
 ## Player points (players who played)
 
-Held-out seasons (2024-25, 2025-26, 2026-27 R2-R13):
+Held-out seasons (2024-25, 2025-26, 2026-27 R2-R13), methods available in all of them:
 
-| method      |         n |   MAE |   RMSE |   spearman |
-|:------------|----------:|------:|-------:|-----------:|
-| ewma        | 17140.000 | 5.990 |  7.709 |      0.469 |
-| model       | 17140.000 | 5.855 |  7.493 |      0.501 |
-| model_price |  2691.000 | 5.956 |  7.558 |      0.416 |
-| season_avg  | 17140.000 | 6.069 |  7.850 |      0.461 |
+| method     |         n |   MAE |   RMSE |   spearman |
+|:-----------|----------:|------:|-------:|-----------:|
+| ewma       | 17140.000 | 5.990 |  7.709 |      0.469 |
+| model      | 17140.000 | 5.846 |  7.484 |      0.503 |
+| season_avg | 17140.000 | 6.069 |  7.850 |      0.461 |
+
+2026-27 only (same rows for every method, including the price blend):
+
+| method      |        n |   MAE |   RMSE |   spearman_per_round |
+|:------------|---------:|------:|-------:|---------------------:|
+| season_avg  | 2703.000 | 6.359 |  8.162 |                0.360 |
+| ewma        | 2703.000 | 6.190 |  7.898 |                0.376 |
+| model       | 2703.000 | 5.977 |  7.559 |                0.422 |
+| model_price | 2691.000 | 5.949 |  7.545 |                0.418 |
 
 Per season:
 
@@ -22,57 +30,61 @@ Per season:
 |:----------------------|---------:|------:|-------:|-------:|---------------------:|
 | (2023, 'season_avg')  | 6435.000 | 5.903 |  7.675 | -0.096 |                0.489 |
 | (2023, 'ewma')        | 6435.000 | 5.828 |  7.529 | -0.013 |                0.500 |
-| (2023, 'model')       | 6435.000 | 5.680 |  7.295 |  0.074 |                0.532 |
+| (2023, 'model')       | 6435.000 | 5.677 |  7.297 |  0.065 |                0.532 |
 | (2024, 'season_avg')  | 6402.000 | 5.932 |  7.658 | -0.339 |                0.492 |
 | (2024, 'ewma')        | 6402.000 | 5.873 |  7.546 | -0.187 |                0.499 |
-| (2024, 'model')       | 6402.000 | 5.768 |  7.372 | -0.073 |                0.527 |
+| (2024, 'model')       | 6402.000 | 5.755 |  7.361 | -0.076 |                0.529 |
 | (2025, 'season_avg')  | 8035.000 | 6.081 |  7.893 | -0.127 |                0.471 |
 | (2025, 'ewma')        | 8035.000 | 6.017 |  7.773 | -0.033 |                0.476 |
-| (2025, 'model')       | 8035.000 | 5.878 |  7.559 |  0.171 |                0.509 |
+| (2025, 'model')       | 8035.000 | 5.876 |  7.554 |  0.160 |                0.509 |
 | (2026, 'season_avg')  | 2703.000 | 6.359 |  8.162 | -0.088 |                0.360 |
 | (2026, 'ewma')        | 2703.000 | 6.190 |  7.898 |  0.134 |                0.376 |
-| (2026, 'model')       | 2703.000 | 5.992 |  7.579 |  0.314 |                0.419 |
-| (2026, 'model_price') | 2691.000 | 5.956 |  7.558 | -0.023 |                0.416 |
+| (2026, 'model')       | 2703.000 | 5.977 |  7.559 |  0.310 |                0.422 |
+| (2026, 'model_price') | 2691.000 | 5.949 |  7.545 | -0.012 |                0.418 |
 
 `model_price` (2026-27 only) blends the model with the app's price, refitted each round.
 
 ## Availability: P(plays | played the team's previous game)
 
+Features use only information known before the deadline. `vacated_min` counts missing
+teammates and never the player himself. An earlier version counted him, which leaked
+the label; that was found in review on 24 Nov and fixed.
+
 |   season |        n |   share_played |   brier_model |   brier_constant |   logloss_model |   logloss_constant |
 |---------:|---------:|---------------:|--------------:|-----------------:|----------------:|-------------------:|
-|     2023 | 6427.000 |          0.892 |         0.070 |            0.097 |           0.218 |              0.343 |
-|     2024 | 6406.000 |          0.898 |         0.064 |            0.092 |           0.200 |              0.330 |
-|     2025 | 8036.000 |          0.897 |         0.066 |            0.093 |           0.207 |              0.332 |
-|     2026 | 2929.000 |          0.831 |         0.063 |            0.144 |           0.201 |              0.472 |
+|     2023 | 6427.000 |          0.892 |         0.085 |            0.097 |           0.297 |              0.344 |
+|     2024 | 6406.000 |          0.898 |         0.078 |            0.092 |           0.277 |              0.329 |
+|     2025 | 8036.000 |          0.897 |         0.081 |            0.093 |           0.284 |              0.332 |
+|     2026 | 2706.000 |          0.899 |         0.081 |            0.090 |           0.289 |              0.326 |
 
 ## Game model: coach points and win probability
 
 |   season |   games |   coach_MAE_model |   coach_MAE_elo |   brier_win_model |   brier_win_elo |   sigma |
 |---------:|--------:|------------------:|----------------:|------------------:|----------------:|--------:|
-|     2023 | 331.000 |             9.374 |           9.632 |             0.203 |           0.207 |  11.848 |
-|     2024 | 330.000 |             9.621 |           9.853 |             0.217 |           0.222 |  11.815 |
-|     2025 | 402.000 |             9.667 |           9.977 |             0.222 |           0.229 |  11.823 |
-|     2026 | 130.000 |             9.804 |           9.770 |             0.225 |           0.220 |  11.803 |
+|     2023 | 331.000 |             9.389 |           9.647 |             0.203 |           0.208 |  11.836 |
+|     2024 | 330.000 |             9.613 |           9.856 |             0.217 |           0.222 |  11.806 |
+|     2025 | 402.000 |             9.665 |           9.981 |             0.222 |           0.229 |  11.814 |
+|     2026 | 130.000 |             9.799 |           9.762 |             0.225 |           0.220 |  11.794 |
 
 Margin model coefficients (points of expected margin per unit):
 
 |           |   coef |
 |:----------|-------:|
 | elo_diff  |  0.019 |
-| net_diff  |  0.204 |
-| rest_diff |  0.276 |
-| vac_diff  | -0.006 |
-| is_home   |  5.228 |
+| net_diff  |  0.206 |
+| rest_diff |  0.222 |
+| vac_diff  | -0.007 |
+| is_home   |  5.344 |
 
 ## Synthetic prices
 
 Price model fitted on 2026-27 rounds 2-9, tested on rounds 10-13:
 
-|             |    value |
-|:------------|---------:|
-| MAE_credits |    0.593 |
-| R2          |    0.920 |
-| n           | 1205.000 |
+|             |   value |
+|:------------|--------:|
+| MAE_credits |   0.583 |
+| R2          |   0.921 |
+| n           | 984.000 |
 
 ## Best-11 squad simulation (100 credits, actual points)
 
@@ -85,76 +97,76 @@ Average points per round:
 
 |                               |   2023 |   2024 |   2025 |   2026 |
 |:------------------------------|-------:|-------:|-------:|-------:|
-| ('hindsight', 'oracle')       |  288.6 |  288.6 |  296.9 |  291.9 |
-| ('played', 'ewma')            |  124.9 |  151.0 |  131.5 |  122.2 |
-| ('played', 'model')           |  143.9 |  159.8 |  150.2 |  137.7 |
-| ('played', 'model_price')     |  nan   |  nan   |  nan   |  146.6 |
-| ('played', 'season_avg')      |  131.2 |  146.1 |  141.8 |  135.6 |
-| ('prev', 'ewma')              |  121.5 |  150.1 |  124.4 |  112.8 |
-| ('prev', 'model')             |  131.3 |  152.2 |  136.7 |  127.9 |
-| ('prev', 'model_avail')       |  140.2 |  156.1 |  145.9 |  138.1 |
-| ('prev', 'model_price')       |  nan   |  nan   |  nan   |  128.8 |
-| ('prev', 'model_price_avail') |  nan   |  nan   |  nan   |  137.3 |
-| ('prev', 'season_avg')        |  128.6 |  141.5 |  135.1 |  132.1 |
+| ('hindsight', 'oracle')       |  289.0 |  289.4 |  297.2 |  291.9 |
+| ('played', 'ewma')            |  126.7 |  155.4 |  134.4 |  122.2 |
+| ('played', 'model')           |  143.0 |  162.5 |  149.4 |  148.8 |
+| ('played', 'model_price')     |  nan   |  nan   |  nan   |  147.0 |
+| ('played', 'season_avg')      |  134.9 |  146.8 |  139.7 |  135.6 |
+| ('prev', 'ewma')              |  124.7 |  150.6 |  124.7 |  112.8 |
+| ('prev', 'model')             |  137.5 |  159.4 |  145.3 |  142.2 |
+| ('prev', 'model_avail')       |  141.1 |  158.5 |  147.5 |  145.1 |
+| ('prev', 'model_price')       |  nan   |  nan   |  nan   |  140.6 |
+| ('prev', 'model_price_avail') |  nan   |  nan   |  nan   |  137.1 |
+| ('prev', 'season_avg')        |  131.8 |  139.9 |  135.7 |  132.5 |
 
 Share of the hindsight-optimal squad (%):
 
 |                               |   2023 |   2024 |   2025 |   2026 |
 |:------------------------------|-------:|-------:|-------:|-------:|
 | ('hindsight', 'oracle')       |  100.0 |  100.0 |  100.0 |  100.0 |
-| ('played', 'ewma')            |   43.3 |   52.3 |   44.3 |   41.9 |
-| ('played', 'model')           |   49.9 |   55.4 |   50.6 |   47.2 |
-| ('played', 'model_price')     |  nan   |  nan   |  nan   |   50.2 |
-| ('played', 'season_avg')      |   45.4 |   50.6 |   47.8 |   46.4 |
-| ('prev', 'ewma')              |   42.1 |   52.0 |   41.9 |   38.6 |
-| ('prev', 'model')             |   45.5 |   52.7 |   46.1 |   43.8 |
-| ('prev', 'model_avail')       |   48.6 |   54.1 |   49.1 |   47.3 |
-| ('prev', 'model_price')       |  nan   |  nan   |  nan   |   44.1 |
+| ('played', 'ewma')            |   43.8 |   53.7 |   45.2 |   41.9 |
+| ('played', 'model')           |   49.5 |   56.2 |   50.3 |   51.0 |
+| ('played', 'model_price')     |  nan   |  nan   |  nan   |   50.4 |
+| ('played', 'season_avg')      |   46.7 |   50.7 |   47.0 |   46.4 |
+| ('prev', 'ewma')              |   43.1 |   52.0 |   41.9 |   38.6 |
+| ('prev', 'model')             |   47.6 |   55.1 |   48.9 |   48.7 |
+| ('prev', 'model_avail')       |   48.8 |   54.8 |   49.6 |   49.7 |
+| ('prev', 'model_price')       |  nan   |  nan   |  nan   |   48.2 |
 | ('prev', 'model_price_avail') |  nan   |  nan   |  nan   |   47.0 |
-| ('prev', 'season_avg')        |   44.6 |   49.0 |   45.5 |   45.3 |
+| ('prev', 'season_avg')        |   45.6 |   48.3 |   45.7 |   45.4 |
 
 All seasons pooled:
 
 |                               |   avg_pts_per_round |   pct_of_hindsight |
 |:------------------------------|--------------------:|-------------------:|
-| ('hindsight', 'oracle')       |               291.6 |              100.0 |
-| ('played', 'ewma')            |               134.2 |               46.0 |
-| ('played', 'model')           |               149.8 |               51.4 |
-| ('played', 'model_price')     |               146.6 |               50.3 |
-| ('played', 'season_avg')      |               139.3 |               47.8 |
-| ('prev', 'ewma')              |               129.7 |               44.5 |
-| ('prev', 'model')             |               138.7 |               47.6 |
-| ('prev', 'model_avail')       |               146.4 |               50.2 |
-| ('prev', 'model_price')       |               128.8 |               44.2 |
-| ('prev', 'model_price_avail') |               137.3 |               47.1 |
-| ('prev', 'season_avg')        |               134.8 |               46.2 |
+| ('hindsight', 'oracle')       |               292.1 |              100.0 |
+| ('played', 'ewma')            |               136.9 |               46.9 |
+| ('played', 'model')           |               151.3 |               51.8 |
+| ('played', 'model_price')     |               147.0 |               50.3 |
+| ('played', 'season_avg')      |               139.9 |               47.9 |
+| ('prev', 'ewma')              |               130.9 |               44.8 |
+| ('prev', 'model')             |               146.8 |               50.3 |
+| ('prev', 'model_avail')       |               148.6 |               50.9 |
+| ('prev', 'model_price')       |               140.6 |               48.1 |
+| ('prev', 'model_price_avail') |               137.1 |               46.9 |
+| ('prev', 'season_avg')        |               135.5 |               46.4 |
 
 ## Top 25 features (share of total gain, last trained model)
 
 |                      |   gain_share | description                                                |
 |:---------------------|-------------:|:-----------------------------------------------------------|
-| pir_ewm_h8           |        0.415 | Longer-run form PIR, weighted (half-life 8 games)          |
-| fp_ewm_h5            |        0.201 | Recent-form fantasy points, weighted (half-life 5 games)   |
-| pir_season_mean      |        0.057 | Season average PIR so far                                  |
-| fp_season_mean       |        0.033 | Season average fantasy points so far                       |
-| min_l3               |        0.031 | Average minutes, last 3 games                              |
-| min_season_mean      |        0.028 | Season average minutes                                     |
-| is_home              |        0.011 | Home game                                                  |
-| rate_fd_p36          |        0.009 | Fouls drawn per 36 min                                     |
+| pir_ewm_h8           |        0.355 | Longer-run form PIR, weighted (half-life 8 games)          |
+| fp_ewm_h5            |        0.204 | Recent-form fantasy points, weighted (half-life 5 games)   |
+| pir_season_mean      |        0.051 | Season average PIR so far                                  |
+| fp_season_mean       |        0.044 | Season average fantasy points so far                       |
+| min_season_mean      |        0.031 | Season average minutes                                     |
+| min_l3               |        0.030 | Average minutes, last 3 games                              |
+| pir_ewm_h3           |        0.029 | Recent-form PIR, weighted (half-life 3 games)              |
+| fp_l10               |        0.023 | Average fantasy points, last 10 games                      |
+| is_home              |        0.013 | Home game                                                  |
+| rate_fd_p36          |        0.010 | Fouls drawn per 36 min                                     |
 | opp_fp_allowed       |        0.009 | Fantasy points the opponent allows per game                |
+| vacated_min          |        0.009 | Minutes of teammates missing this game (injury/rest)       |
 | usage_p36            |        0.008 | Possessions used per 36 min (shots + 0.44·FTA + turnovers) |
-| vacated_min          |        0.008 | Minutes of teammates missing this game (injury/rest)       |
-| missed_streak        |        0.007 | Team games missed in a row before this one                 |
 | rate_dreb_p36        |        0.007 | Defensive rebounds per 36 min                              |
-| prev_fp_mean         |        0.007 | Last season's average fantasy points                       |
-| career_games         |        0.006 | EuroLeague games played since 2016-17                      |
+| missed_streak        |        0.007 | Team games missed in a row before this one                 |
 | vacated_min_pos      |        0.006 | Minutes of missing teammates at his position               |
 | rate_tov_p36         |        0.006 | Turnovers per 36 min                                       |
 | elo_p_win            |        0.006 | Win probability from Elo (incl. home court)                |
+| prev_fp_mean         |        0.006 | Last season's average fantasy points                       |
+| career_games         |        0.006 | EuroLeague games played since 2016-17                      |
+| min_ewm_h5           |        0.005 | Recent minutes, weighted (half-life 5 games)               |
 | opp_elo              |        0.005 | Opponent Elo rating                                        |
-| rate_blk_against_p36 |        0.005 | Shots blocked (against him) per 36 min                     |
 | rate_missed_fg_p36   |        0.005 | Missed shots per 36 min                                    |
+| rate_blk_against_p36 |        0.005 | Shots blocked (against him) per 36 min                     |
 | dnp_rate_season      |        0.005 | Share of his team's games missed this season               |
-| pir_season_std       |        0.004 | Game-to-game volatility of PIR this season                 |
-| rate_missed_ft_p36   |        0.004 | Missed free throws per 36 min                              |
-| min_ewm_h5           |        0.004 | Recent minutes, weighted (half-life 5 games)               |
