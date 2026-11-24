@@ -4,7 +4,7 @@
 config/settings.yaml
 
 # Data (raw API cache, DuckDB, parquet)
-data/
+/data/
 *.duckdb
 *.parquet
 
