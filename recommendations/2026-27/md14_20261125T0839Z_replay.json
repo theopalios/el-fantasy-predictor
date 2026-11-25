@@ -1,0 +1,136 @@
+{
+ "season": 2026,
+ "matchday": 14,
+ "generated_utc": "2026-11-25T08:39:36.976980+00:00",
+ "deadline_utc": "2026-11-24T17:00:00+00:00",
+ "budget": 100.0,
+ "cost": 99.99999999999999,
+ "expected_total": 149.6987605358872,
+ "squad": [
+  {
+   "player_id": 4005,
+   "name": "Edwin Jackson",
+   "team": "ASV",
+   "pos": "F",
+   "price": 4.2,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 4.900796243822188,
+   "p_play": 0.8768470583810518
+  },
+  {
+   "player_id": 7223,
+   "name": "Clement Frisch",
+   "team": "KBA",
+   "pos": "F",
+   "price": 5.4,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 6.713287274837468,
+   "p_play": 0.9311640400722887
+  },
+  {
+   "player_id": 7238,
+   "name": "Rodions Kurucs",
+   "team": "KBA",
+   "pos": "F",
+   "price": 6.2,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 9.393006560628605,
+   "p_play": 0.9384446352469893
+  },
+  {
+   "player_id": 11521,
+   "name": "Marc-owen Fodzo Dada",
+   "team": "ASV",
+   "pos": "G",
+   "price": 5.1,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 6.682168695218636,
+   "p_play": 0.9519671481083728
+  },
+  {
+   "player_id": 3851,
+   "name": "Andres Feliz",
+   "team": "RMB",
+   "pos": "G",
+   "price": 9.6,
+   "role": "sixth",
+   "captain": false,
+   "exp_pts": 14.234462553007763,
+   "p_play": 0.9695097858365588
+  },
+  {
+   "player_id": 11504,
+   "name": "Johannes Thiemann",
+   "team": "BAY",
+   "pos": "C",
+   "price": 11.6,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 15.39483801103443,
+   "p_play": 0.9448660307332136
+  },
+  {
+   "player_id": 4094,
+   "name": "Kenan Kamenjas",
+   "team": "KBA",
+   "pos": "C",
+   "price": 6.2,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 13.784601409656595,
+   "p_play": 0.9545129881065787
+  },
+  {
+   "player_id": 3766,
+   "name": "Sasha Vezenkov",
+   "team": "OLY",
+   "pos": "F",
+   "price": 20.0,
+   "role": "starter",
+   "captain": true,
+   "exp_pts": 23.658497473810744,
+   "p_play": 0.9708627734830436
+  },
+  {
+   "player_id": 3806,
+   "name": "Duane Washington",
+   "team": "BAY",
+   "pos": "G",
+   "price": 11.1,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 15.523794786623137,
+   "p_play": 0.9542889593870189
+  },
+  {
+   "player_id": 3850,
+   "name": "Theo Maledon",
+   "team": "RMB",
+   "pos": "G",
+   "price": 13.8,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 18.094787155658004,
+   "p_play": 0.9455978400611025
+  }
+ ],
+ "coach": {
+  "player_id": 3938,
+  "name": "Ibon Navarro",
+  "team": "CZV",
+  "price": 6.8,
+  "exp_pts": 11.504652285032325
+ },
+ "notes": [
+  "Replay of round 14 from the snapshot taken Tue 24 Nov 16:55 UTC (5 min before the deadline)",
+  "Only box scores from before 2026-11-24 17:00 UTC are used",
+  "48 players have not played a EuroLeague game this season (12 of them not mapped to EuroLeague ids): debut average 5.1 pts \u00d7 P(plays) 0.25 unless you override",
+  "Box scores through 2026-11-20; app line-ups from the snapshot"
+ ],
+ "trades": null,
+ "dry_run": "Replay: Round 14 run on 25 Nov from the app snapshot saved 4.6 minutes before the deadline (Tue 24 Nov 17:00 UTC), using only box scores from before that deadline. This is what the model would have recommended."
+}

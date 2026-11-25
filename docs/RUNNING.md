@@ -174,6 +174,18 @@ python -m elfantasy.data.build
 python -m elfantasy.data.fantasy_build
 ```
 
+### 3.5 Replay a past round
+
+Each saved snapshot lets you see what the model would have picked before that round's deadline.
+It uses the snapshot's line-ups and only box scores from before the deadline:
+
+```bash
+python -m elfantasy.weekly --snapshot snapshots/2026-27/md14/20261124T165522Z.json.gz --save
+```
+
+Pick the last snapshot taken before the deadline; the file name is the UTC time it was taken.
+Saved replays are scored by `python -m elfantasy.evaluate` like any other recommendation.
+
 ---
 
 ## 4. Settings (notebook Settings cell)

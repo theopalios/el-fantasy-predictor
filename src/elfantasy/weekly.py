@@ -16,6 +16,7 @@ our availability model.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import logging
 from dataclasses import dataclass, field
@@ -255,6 +256,18 @@ def _moved_matches(app: FantasyAppAPI, cfg: dict, md: dict, matches: pd.DataFram
     return set(matches.loc[moved, "match_id"])
 
 
+def _store_as_of(store: Store, as_of: pd.Timestamp) -> Store:
+    """The data as it was at `as_of`: later games become unplayed and their box scores vanish."""
+    as_of = as_of.tz_convert("UTC") if as_of.tzinfo else as_of.tz_localize("UTC")
+    games = store.games.copy()
+    later = games["date_utc"] >= as_of
+    games.loc[later, "played"] = False
+    games.loc[later, ["home_score", "away_score"]] = np.nan
+    pg = store.player_games[store.player_games["date_utc"] < as_of].reset_index(drop=True)
+    tg = store.team_games[store.team_games["date_utc"] < as_of].reset_index(drop=True)
+    return Store(games=games, player_games=pg, team_games=tg, people=store.people)
+
+
 def _last_game_players(ctx: FeatureContext, season: int) -> pd.DataFrame:
     """Players who played each team's most recent played game this season."""
     pg = ctx.store.player_games
@@ -275,7 +288,12 @@ def recommend(
     bank: float = 0.0,
     max_trades: int = 4,
     refresh: bool = False,
+    snapshot: str | Path | None = None,
+    as_of: pd.Timestamp | None = None,
 ) -> Recommendation:
+    """`snapshot`: replay a past round from a saved pre-deadline snapshot (its line-ups and
+    play probabilities instead of live ones). `as_of`: use only box scores from before this
+    time (defaults to the snapshot's deadline), so the replay sees exactly what was known."""
     rules = default_rules()
     budget = rules.initial_budget if budget is None else budget
     if refresh:
@@ -283,10 +301,21 @@ def recommend(
     notes: list[str] = []
     year = current_season_year()
 
-    # ---- the round, from the app
+    # ---- the round, from the app (live) or from a saved snapshot (replay)
     app = FantasyAppAPI(HttpClient(min_interval=0.3))
     cfg = app.config()
-    if matchday is None:
+    snap = None
+    if snapshot is not None:
+        with gzip.open(snapshot, "rt", encoding="utf-8") as fh:
+            snap = json.load(fh)
+        if matchday is not None and int(matchday) != int(snap["matchday"]):
+            raise ValueError(f"snapshot is for round {snap['matchday']}, not {matchday}")
+        md = next(m for m in cfg["matchdays"] if m["number"] == int(snap["matchday"]))
+        sched = snap["schedule"]
+        taken = pd.Timestamp(snap["snapshot_utc"])
+        notes.append(f"Replay of round {md['number']} from the snapshot taken {taken:%a %d %b %H:%M} UTC "
+                     f"({snap.get('minutes_to_deadline', float('nan')):.0f} min before the deadline)")
+    elif matchday is None:
         md, sched = find_upcoming_matchday(app, cfg)
     else:
         md = next((m for m in cfg["matchdays"] if m["number"] == matchday), None)
@@ -297,7 +326,11 @@ def recommend(
     matches = parse_schedule(sched)
     moved_ids = _moved_matches(app, cfg, md, matches)
     moved_teams = set(matches.loc[matches["match_id"].isin(moved_ids), ["home_abbr", "away_abbr"]].to_numpy().ravel())
-    lineups = pd.concat([parse_lineups(app.match_lineups(int(m))) for m in matches["match_id"]], ignore_index=True)
+    if snap is not None:
+        lineups = pd.concat([parse_lineups(snap["lineups"][str(m)]) for m in matches["match_id"]
+                             if str(m) in snap["lineups"]], ignore_index=True)
+    else:
+        lineups = pd.concat([parse_lineups(app.match_lineups(int(m))) for m in matches["match_id"]], ignore_index=True)
     lineups = lineups.drop_duplicates("player_id").set_index("player_id")
     lineups["name"] = (lineups["first_name"].fillna("") + " " + lineups["last_name"].fillna("")).str.strip()
     deadline = matches["started_at"].min()
@@ -306,6 +339,11 @@ def recommend(
     mp = pd.read_parquet(PROCESSED_DIR / "map_player.parquet").set_index("player_id")["person_code"]
     mt = pd.read_parquet(PROCESSED_DIR / "map_team.parquet").set_index("app_abbr")["el_code"]
     store = Store.load()
+    if snap is not None and as_of is None:
+        as_of = deadline
+    if as_of is not None:
+        store = _store_as_of(store, pd.Timestamp(as_of))
+        notes.append(f"Only box scores from before {pd.Timestamp(as_of):%Y-%m-%d %H:%M} UTC are used")
     ctx = FeatureContext.from_store(store)
     g = store.games[(store.games["season"] == year) & (store.games["round"] == md["number"])]
     m = matches.assign(home_el=matches["home_abbr"].map(mt), away_el=matches["away_abbr"].map(mt))
@@ -496,8 +534,9 @@ def recommend(
             explanations[int(pid)] = [(f, sel.iloc[row_i][f], float(v), FEATURE_DESCRIPTIONS.get(f, "")) for f, v in top.items()]
 
     data_through = store.player_games["date_utc"].max()
-    notes.append(f"Box scores through {data_through:%Y-%m-%d}; app line-ups fetched {now:%Y-%m-%d %H:%M} UTC")
-    if deadline is not None and deadline < now:
+    source = "from the snapshot" if snap is not None else f"fetched {now:%Y-%m-%d %H:%M} UTC"
+    notes.append(f"Box scores through {data_through:%Y-%m-%d}; app line-ups {source}")
+    if snap is None and deadline is not None and deadline < now:
         notes.append("The deadline has passed: this round has already started")
     return Recommendation(matchday=md["number"], deadline=deadline, budget=budget, players=players,
                           coaches=coaches, squad=squad, explanations=explanations, trades=trades, notes=notes,
@@ -514,6 +553,7 @@ def main() -> None:
     ap.add_argument("--exclude", action="append", default=[])
     ap.add_argument("--lock", action="append", default=[])
     ap.add_argument("--refresh", action="store_true", help="fetch new box scores and player list first")
+    ap.add_argument("--snapshot", default=None, help="replay a past round from a saved snapshot (.json.gz)")
     ap.add_argument("--save", action="store_true", help="write the markdown to recommendations/")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -521,7 +561,8 @@ def main() -> None:
                  | {n: "PROBABLE" for n in args.probable})
     try:
         rec = recommend(matchday=args.matchday, budget=args.budget, overrides=overrides,
-                        excluded=args.exclude, locked=args.lock, refresh=args.refresh)
+                        excluded=args.exclude, locked=args.lock, refresh=args.refresh,
+                        snapshot=args.snapshot)
     except (ValueError, KeyError) as exc:
         raise SystemExit(f"error: {exc}")
     print(rec.to_markdown())
