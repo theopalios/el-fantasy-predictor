@@ -1,0 +1,271 @@
+{
+ "my_squad": {
+  "expected_total": 150.82458186861763,
+  "cost": 98.6,
+  "squad": [
+   {
+    "player_id": 3991,
+    "name": "Alberto Abalde",
+    "team": "RMB",
+    "pos": "F",
+    "price": 6.0,
+    "role": "bench",
+    "captain": false,
+    "exp_pts": 7.771381855823809,
+    "p_play": 0.9588153915912166
+   },
+   {
+    "player_id": 7223,
+    "name": "Clement Frisch",
+    "team": "KBA",
+    "pos": "F",
+    "price": 5.2,
+    "role": "bench",
+    "captain": false,
+    "exp_pts": 5.722011415871685,
+    "p_play": 0.8711557665532582
+   },
+   {
+    "player_id": 7238,
+    "name": "Rodions Kurucs",
+    "team": "KBA",
+    "pos": "F",
+    "price": 6.0,
+    "role": "bench",
+    "captain": false,
+    "exp_pts": 7.712497081373039,
+    "p_play": 0.8881487202678932
+   },
+   {
+    "player_id": 11521,
+    "name": "Marc-owen Fodzo Dada",
+    "team": "ASV",
+    "pos": "G",
+    "price": 5.1,
+    "role": "bench",
+    "captain": false,
+    "exp_pts": 6.069036956346305,
+    "p_play": 0.8954818736870583
+   },
+   {
+    "player_id": 3851,
+    "name": "Andres Feliz",
+    "team": "RMB",
+    "pos": "G",
+    "price": 10.1,
+    "role": "sixth",
+    "captain": false,
+    "exp_pts": 14.365312352126555,
+    "p_play": 0.9564541492820492
+   },
+   {
+    "player_id": 4094,
+    "name": "Kenan Kamenjas",
+    "team": "KBA",
+    "pos": "C",
+    "price": 6.2,
+    "role": "starter",
+    "captain": false,
+    "exp_pts": 13.115288494615939,
+    "p_play": 0.9270979057640354
+   },
+   {
+    "player_id": 7346,
+    "name": "Zacharie Perrin",
+    "team": "KBA",
+    "pos": "C",
+    "price": 8.2,
+    "role": "starter",
+    "captain": false,
+    "exp_pts": 12.862252431447255,
+    "p_play": 0.9579184816069993
+   },
+   {
+    "player_id": 3766,
+    "name": "Sasha Vezenkov",
+    "team": "OLY",
+    "pos": "F",
+    "price": 20.1,
+    "role": "starter",
+    "captain": true,
+    "exp_pts": 24.621429797437948,
+    "p_play": 0.9482397514713647
+   },
+   {
+    "player_id": 3850,
+    "name": "Theo Maledon",
+    "team": "RMB",
+    "pos": "G",
+    "price": 13.9,
+    "role": "starter",
+    "captain": false,
+    "exp_pts": 18.398159058118853,
+    "p_play": 0.9324087842655169
+   },
+   {
+    "player_id": 8993,
+    "name": "Cory Joseph",
+    "team": "OLY",
+    "pos": "G",
+    "price": 7.2,
+    "role": "starter",
+    "captain": false,
+    "exp_pts": 11.269493996459442,
+    "p_play": 0.9384081408305718
+   }
+  ],
+  "coach": {
+   "player_id": 3885,
+   "name": "Georgios Bartzokas",
+   "team": "OLY",
+   "price": 10.6,
+   "exp_pts": 17.93375228626631
+  }
+ },
+ "season": 2026,
+ "matchday": 15,
+ "generated_utc": "2026-11-26T13:13:17.689822+00:00",
+ "deadline_utc": "2026-12-03T17:30:00+00:00",
+ "budget": 100.0,
+ "cost": 99.9,
+ "expected_total": 152.67860391559174,
+ "squad": [
+  {
+   "player_id": 3991,
+   "name": "Alberto Abalde",
+   "team": "RMB",
+   "pos": "F",
+   "price": 6.0,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 7.771381855823809,
+   "p_play": 0.9588153915912166
+  },
+  {
+   "player_id": 8644,
+   "name": "Stefan Joksimovic",
+   "team": "KBA",
+   "pos": "F",
+   "price": 4.7,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 5.503270222262507,
+   "p_play": 0.8554660275718787
+  },
+  {
+   "player_id": 3867,
+   "name": "Kostas Papanikolaou",
+   "team": "OLY",
+   "pos": "F",
+   "price": 4.0,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 3.691888847814569,
+   "p_play": 0.8746800525069097
+  },
+  {
+   "player_id": 3971,
+   "name": "Vanja Marinkovic",
+   "team": "PAR",
+   "pos": "G",
+   "price": 4.3,
+   "role": "bench",
+   "captain": false,
+   "exp_pts": 4.418545857203453,
+   "p_play": 0.8422948326193004
+  },
+  {
+   "player_id": 4094,
+   "name": "Kenan Kamenjas",
+   "team": "KBA",
+   "pos": "C",
+   "price": 6.2,
+   "role": "sixth",
+   "captain": false,
+   "exp_pts": 13.115288494615939,
+   "p_play": 0.9270979057640354
+  },
+  {
+   "player_id": 7346,
+   "name": "Zacharie Perrin",
+   "team": "KBA",
+   "pos": "C",
+   "price": 8.2,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 12.862252431447255,
+   "p_play": 0.9579184816069993
+  },
+  {
+   "player_id": 3766,
+   "name": "Sasha Vezenkov",
+   "team": "OLY",
+   "pos": "F",
+   "price": 20.1,
+   "role": "starter",
+   "captain": true,
+   "exp_pts": 24.621429797437948,
+   "p_play": 0.9482397514713647
+  },
+  {
+   "player_id": 7193,
+   "name": "Vasilije Micic",
+   "team": "HTA",
+   "pos": "G",
+   "price": 11.8,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 16.06843630658876,
+   "p_play": 0.9558003859012264
+  },
+  {
+   "player_id": 3850,
+   "name": "Theo Maledon",
+   "team": "RMB",
+   "pos": "G",
+   "price": 13.9,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 18.398159058118853,
+   "p_play": 0.9324087842655169
+  },
+  {
+   "player_id": 3851,
+   "name": "Andres Feliz",
+   "team": "RMB",
+   "pos": "G",
+   "price": 10.1,
+   "role": "starter",
+   "captain": false,
+   "exp_pts": 14.365312352126555,
+   "p_play": 0.9564541492820492
+  }
+ ],
+ "coach": {
+  "player_id": 3885,
+  "name": "Georgios Bartzokas",
+  "team": "OLY",
+  "price": 10.6,
+  "exp_pts": 17.93375228626631
+ },
+ "notes": [
+  "44 players have not played a EuroLeague game this season (12 of them not mapped to EuroLeague ids): debut average 5.1 pts \u00d7 P(plays) 0.25 unless you override",
+  "Box scores through 2026-11-25; app line-ups fetched 2026-11-26 13:13 UTC"
+ ],
+ "trades": {
+  "out": [
+   "Johannes Thiemann",
+   "Ibon Navarro",
+   "Edwin Jackson",
+   "Duane Washington"
+  ],
+  "in": [
+   "Cory Joseph",
+   "Zacharie Perrin",
+   "Georgios Bartzokas",
+   "Alberto Abalde"
+  ],
+  "gain": 20.923675420222935
+ },
+ "dry_run": "Early run on 26 Nov with box scores through Round 14 and the app's Round 15 line-ups as of 26 Nov. The Round 14 squad is used as your roster (4 trades, 0.0 credits in the bank). Re-run on Thu 3 Dec, as late as possible before the 17:30 UTC tip-off."
+}

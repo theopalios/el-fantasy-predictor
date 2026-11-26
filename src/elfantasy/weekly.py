@@ -168,11 +168,27 @@ class Recommendation:
             lines += ["## Notes", ""] + [f"- {n}" for n in self.notes] + [""]
         return "\n".join(lines)
 
+    @staticmethod
+    def _squad_record(squad: SquadResult) -> dict:
+        return {
+            "expected_total": float(squad.objective),
+            "cost": float(squad.cost),
+            "squad": [
+                {"player_id": int(pid), "name": r["name"], "team": r["team"], "pos": r["pos"],
+                 "price": float(r["price"]), "role": r["role"], "captain": bool(r["captain"]),
+                 "exp_pts": float(r["exp_pts"]), "p_play": float(r["p_play"])}
+                for pid, r in squad.players.iterrows()
+            ],
+            "coach": {"player_id": int(squad.coach.name), "name": squad.coach["name"], "team": squad.coach["team"],
+                      "price": float(squad.coach["price"]), "exp_pts": float(squad.coach["exp_pts"])},
+        }
+
     def to_record(self) -> dict:
         """Machine-readable summary, used by `python -m elfantasy.evaluate` after the round."""
         sq = self.squad.players
         c = self.squad.coach
         return {
+            "my_squad": self._squad_record(self.my_squad) if self.my_squad is not None else None,
             "season": current_season_year(),
             "matchday": int(self.matchday),
             "generated_utc": datetime.now(timezone.utc).isoformat(),
